@@ -1,0 +1,19 @@
+# TallyPrime HTTP-XML Gateway Integration - Python Dependencies
+
+# HTTP requests for TallyPrime communication
+requests>=2.25.0
+
+# XML parsing and handling
+# (xml.etree.ElementTree is built-in to Python)
+
+# Decimal precision for financial calculations  
+# (decimal is built-in to Python)
+
+# Date and time handling
+# (datetime is built-in to Python)
+
+# Optional: For enhanced logging
+# logging is built-in to Python
+
+# Note: This project uses mostly built-in Python libraries
+# Only requests library is required as external dependency

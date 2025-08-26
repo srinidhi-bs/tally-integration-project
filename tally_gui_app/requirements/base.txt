@@ -1,0 +1,30 @@
+# TallyPrime Integration Manager - Base Dependencies
+# Professional PySide6 GUI Application
+# 
+# Core dependencies required for the application to run
+
+# GUI Framework - Professional Qt6 bindings for Python
+PySide6>=6.5.0
+
+# HTTP communication with TallyPrime Gateway
+requests>=2.25.0
+
+# Enhanced HTTP client (backup/alternative to requests)
+urllib3>=1.26.0
+
+# Configuration file handling
+configparser
+
+# Logging enhancements (though logging is built-in)
+# For potential future structured logging needs
+# (Currently using built-in logging module)
+
+# Note: Most other dependencies are built-in to Python:
+# - xml.etree.ElementTree (XML parsing)
+# - threading (Multi-threading support)
+# - json (JSON handling)
+# - datetime (Date/time operations)
+# - decimal (Financial calculations)
+# - logging (Application logging)
+# - pathlib (Modern path handling)
+# - typing (Type hints)

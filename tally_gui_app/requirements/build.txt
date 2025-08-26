@@ -1,0 +1,21 @@
+# TallyPrime Integration Manager - Build and Packaging Dependencies
+# Tools needed for creating distributable executables
+
+# Include base requirements
+-r base.txt
+
+# Executable creation and packaging
+pyinstaller>=5.0.0
+
+# Alternative packaging tool (if needed)
+# cx_Freeze>=6.0.0
+
+# Windows-specific packaging tools (when building on Windows)
+# pywin32>=227.0.0  # Windows API access (auto-installed with PyInstaller on Windows)
+
+# Build automation (optional)
+# build>=0.8.0
+# wheel>=0.37.0
+
+# Note: These dependencies are only needed when creating
+# the final distributable executable for end users

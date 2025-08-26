@@ -1,0 +1,29 @@
+# TallyPrime Integration Manager - Development Dependencies
+# Additional tools and libraries for development and testing
+
+# Include base requirements
+-r base.txt
+
+# Testing framework
+pytest>=7.0.0
+pytest-qt>=4.0.0  # For Qt GUI testing
+
+# Code quality tools
+flake8>=4.0.0     # Code linting
+black>=22.0.0     # Code formatting
+isort>=5.10.0     # Import sorting
+
+# Type checking (optional but recommended for learning)
+mypy>=0.991
+
+# Development tools
+ipython>=8.0.0    # Enhanced Python REPL for debugging
+
+# Documentation generation (if needed in future)
+# sphinx>=4.0.0
+
+# Packaging and distribution
+# pyinstaller>=5.0.0  # Will be added in build.txt
+
+# Note: These are development-only dependencies
+# The application should run with only base.txt requirements

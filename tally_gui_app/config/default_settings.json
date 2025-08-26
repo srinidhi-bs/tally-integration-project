@@ -1,0 +1,40 @@
+{
+    "application": {
+        "name": "TallyPrime Integration Manager",
+        "version": "1.0.0-dev",
+        "author": "Srinidhi BS",
+        "window_title": "TallyPrime Integration Manager - Professional Desktop Application"
+    },
+    "tally_connection": {
+        "default_host": "localhost",
+        "default_port": 9000,
+        "timeout_seconds": 30,
+        "retry_attempts": 3,
+        "auto_discover": true
+    },
+    "ui_settings": {
+        "theme": "professional_blue",
+        "font_family": "Segoe UI",
+        "font_size": 9,
+        "window_width": 1200,
+        "window_height": 800,
+        "remember_window_position": true,
+        "show_status_bar": true,
+        "show_control_panel": true,
+        "show_log_panel": true
+    },
+    "logging": {
+        "level": "INFO",
+        "max_file_size_mb": 10,
+        "backup_count": 5,
+        "console_output": true,
+        "file_output": true,
+        "log_directory": "logs"
+    },
+    "performance": {
+        "max_table_rows": 10000,
+        "refresh_interval_seconds": 30,
+        "enable_data_caching": true,
+        "cache_timeout_minutes": 15
+    }
+}
