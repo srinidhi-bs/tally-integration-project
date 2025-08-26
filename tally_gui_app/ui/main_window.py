@@ -24,7 +24,8 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QStatusBar, QMenuBar, QMenu, QToolBar,
-    QSizePolicy, QSplitter
+    QSizePolicy, QSplitter, QDockWidget, QTextEdit, QPushButton,
+    QFrame, QGroupBox
 )
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
 from PySide6.QtGui import QAction, QKeySequence, QFont
@@ -75,11 +76,16 @@ class MainWindow(QMainWindow):
         self.status_bar: Optional[QStatusBar] = None
         self.menu_bar: Optional[QMenuBar] = None
         
+        # Dock widgets for professional panel layout
+        self.control_panel_dock: Optional[QDockWidget] = None
+        self.log_panel_dock: Optional[QDockWidget] = None
+        
         # Initialize the window
         self._setup_window_properties()
         self._create_menu_bar()
         self._create_toolbar()
         self._create_central_widget()
+        self._create_dock_widgets()
         self._create_status_bar()
         self._restore_window_state()
         
@@ -149,6 +155,22 @@ class MainWindow(QMainWindow):
         refresh_action.triggered.connect(self._on_refresh)
         view_menu.addAction(refresh_action)
         
+        # Add separator before panel toggles
+        view_menu.addSeparator()
+        
+        # Panel visibility actions (will be connected after dock widgets are created)
+        self.control_panel_action = QAction("&Control Panel", self)
+        self.control_panel_action.setCheckable(True)
+        self.control_panel_action.setChecked(True)
+        self.control_panel_action.setStatusTip("Show/hide the control panel")
+        view_menu.addAction(self.control_panel_action)
+        
+        self.log_panel_action = QAction("&Log Panel", self)
+        self.log_panel_action.setCheckable(True)
+        self.log_panel_action.setChecked(True)
+        self.log_panel_action.setStatusTip("Show/hide the log panel")
+        view_menu.addAction(self.log_panel_action)
+        
         # Create Tools menu
         tools_menu = self.menu_bar.addMenu("&Tools")
         settings_action = QAction("&Settings", self)
@@ -193,39 +215,322 @@ class MainWindow(QMainWindow):
         """
         Create the central widget that contains the main application content.
         
-        Learning: QMainWindow requires a central widget for the main content area
+        With dock widgets, the central widget focuses on the main data display area.
+        The control and log panels will be implemented as dockable widgets.
+        
+        Learning: QMainWindow's central widget should contain the primary content,
+        while secondary features use dock widgets for better user customization.
         """
         # Create the central widget container
-        self.central_widget = QWidget()
+        self.central_widget = self._create_main_content_area()
         self.setCentralWidget(self.central_widget)
         
-        # Create a horizontal layout for the main content
-        main_layout = QHBoxLayout(self.central_widget)
+        self.logger.info("Central widget created for main content display")
+    
+    def _create_dock_widgets(self):
+        """
+        Create professional dockable panels for the application.
         
-        # Create a splitter to allow resizable panels
-        # QSplitter allows users to resize panels by dragging the divider
-        splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        This method creates:
+        1. Control Panel - Connection management and operation controls
+        2. Log Panel - Real-time logging and status information
         
-        # Create placeholder panels for now
-        # In later phases, these will be replaced with professional widgets
+        Learning Points:
+        - QDockWidget provides movable, resizable panels
+        - Dock widgets can be floated, tabbed, and repositioned by users
+        - Professional applications use dock widgets for customizable layouts
+        """
+        # Create Control Panel Dock Widget
+        self.control_panel_dock = QDockWidget("Control Panel", self)
+        self.control_panel_dock.setObjectName("ControlPanelDock")  # Important for state saving
         
-        # Left panel - Control Panel (will become connection and operation controls)
-        left_panel = self._create_placeholder_panel("Control Panel", 
-                                                   "Connection status and controls will appear here")
-        left_panel.setMinimumWidth(250)
-        left_panel.setMaximumWidth(400)
-        splitter.addWidget(left_panel)
+        # Create the control panel content
+        control_panel_content = self._create_control_panel_content()
+        self.control_panel_dock.setWidget(control_panel_content)
         
-        # Right panel - Main Content Area (will become data tables and forms)
-        right_panel = self._create_placeholder_panel("Main Content", 
-                                                    "TallyPrime data and operations will appear here")
-        splitter.addWidget(right_panel)
+        # Set dock widget properties
+        self.control_panel_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.control_panel_dock.setFeatures(
+            QDockWidget.DockWidgetMovable | 
+            QDockWidget.DockWidgetClosable | 
+            QDockWidget.DockWidgetFloatable
+        )
         
-        # Set initial splitter sizes (25% left, 75% right)
-        splitter.setSizes([300, 900])
+        # Add to main window (left side)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.control_panel_dock)
         
-        self.logger.info("Central widget created with resizable panels")
+        # Create Log Panel Dock Widget
+        self.log_panel_dock = QDockWidget("Operations Log", self)
+        self.log_panel_dock.setObjectName("LogPanelDock")  # Important for state saving
+        
+        # Create the log panel content
+        log_panel_content = self._create_log_panel_content()
+        self.log_panel_dock.setWidget(log_panel_content)
+        
+        # Set dock widget properties
+        self.log_panel_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
+        self.log_panel_dock.setFeatures(
+            QDockWidget.DockWidgetMovable | 
+            QDockWidget.DockWidgetClosable | 
+            QDockWidget.DockWidgetFloatable
+        )
+        
+        # Add to main window (right side)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.log_panel_dock)
+        
+        # Connect dock widget visibility to menu actions
+        self._connect_dock_widget_actions()
+        
+        self.logger.info("Dock widgets created: Control Panel (left) and Log Panel (right)")
+    
+    def _create_control_panel_content(self) -> QWidget:
+        """
+        Create the content for the control panel dock widget.
+        
+        This panel contains:
+        - Connection status and controls
+        - TallyPrime operation buttons
+        - Quick action shortcuts
+        
+        Returns:
+            QWidget: Configured control panel content
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(8)
+        layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Connection Status Group
+        connection_group = QGroupBox("Connection Status")
+        connection_layout = QVBoxLayout(connection_group)
+        
+        # Connection status display
+        status_label = QLabel("● Not Connected")
+        status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        connection_layout.addWidget(status_label)
+        
+        company_label = QLabel("Company: Not Connected")
+        company_label.setStyleSheet("color: #6c757d; font-size: 11px;")
+        connection_layout.addWidget(company_label)
+        
+        # Connection action buttons
+        test_conn_btn = QPushButton("🔍 Test Connection")
+        test_conn_btn.clicked.connect(self._on_test_connection)
+        connection_layout.addWidget(test_conn_btn)
+        
+        refresh_btn = QPushButton("🔄 Refresh Data")
+        refresh_btn.clicked.connect(self._on_refresh)
+        connection_layout.addWidget(refresh_btn)
+        
+        settings_btn = QPushButton("⚙️ Connection Settings")
+        settings_btn.clicked.connect(self._on_settings)
+        connection_layout.addWidget(settings_btn)
+        
+        layout.addWidget(connection_group)
+        
+        # Data Operations Group
+        data_group = QGroupBox("Data Operations")
+        data_layout = QVBoxLayout(data_group)
+        
+        ledger_btn = QPushButton("📋 View Ledgers")
+        ledger_btn.clicked.connect(self._on_view_ledgers)
+        data_layout.addWidget(ledger_btn)
+        
+        balance_btn = QPushButton("📊 Balance Sheet")
+        balance_btn.clicked.connect(self._on_balance_sheet)
+        data_layout.addWidget(balance_btn)
+        
+        export_btn = QPushButton("💾 Export Data")
+        export_btn.clicked.connect(self._on_export_data)
+        data_layout.addWidget(export_btn)
+        
+        layout.addWidget(data_group)
+        
+        # Add stretch to push content to top
+        layout.addStretch()
+        
+        # Style the panel
+        widget.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #bdc3c7;
+                border-radius: 6px;
+                margin: 4px 0px;
+                padding-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px 0 4px;
+            }
+            QPushButton {
+                background-color: #3498db;
+                border: none;
+                color: white;
+                padding: 8px;
+                border-radius: 4px;
+                font-weight: bold;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #21618c;
+            }
+        """)
+        
+        return widget
+    
+    def _create_log_panel_content(self) -> QWidget:
+        """
+        Create the content for the log panel dock widget.
+        
+        This panel contains:
+        - Real-time operation logging
+        - Status messages and updates
+        - Error reporting and debugging information
+        
+        Returns:
+            QWidget: Configured log panel content
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(4)
+        layout.setContentsMargins(4, 4, 4, 4)
+        
+        # Log header
+        header_label = QLabel("Live Operations Log")
+        header_label.setStyleSheet("font-weight: bold; color: #2c3e50; padding: 4px;")
+        layout.addWidget(header_label)
+        
+        # Log display area
+        self.log_display = QTextEdit()
+        self.log_display.setReadOnly(True)
+        # Note: QTextEdit doesn't have setMaximumBlockCount, we'll manage log size manually
+        
+        # Style the log display
+        self.log_display.setStyleSheet("""
+            QTextEdit {
+                background-color: #2c3e50;
+                color: #ecf0f1;
+                border: 1px solid #34495e;
+                border-radius: 4px;
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                font-size: 11px;
+                padding: 4px;
+            }
+        """)
+        
+        # Add some initial log entries
+        self._add_log_entry("🔗 Application started - TallyPrime Integration Manager", "info")
+        self._add_log_entry("📊 Waiting for TallyPrime connection...", "info")
+        self._add_log_entry("⚡ System ready for operations", "success")
+        
+        layout.addWidget(self.log_display)
+        
+        return widget
+    
+    def _create_main_content_area(self) -> QWidget:
+        """
+        Create the main content area for the central widget.
+        
+        This area will contain:
+        - Data tables and visualizations
+        - Form inputs and data entry
+        - Primary application content
+        
+        Returns:
+            QWidget: Main content area widget
+        """
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Main content placeholder
+        content_label = QLabel("Main Content Area")
+        content_label.setAlignment(Qt.AlignCenter)
+        content_label.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+                color: #2c3e50;
+                background-color: #f8f9fa;
+                border: 2px dashed #bdc3c7;
+                border-radius: 8px;
+                padding: 40px;
+                margin: 20px;
+            }
+        """)
+        
+        desc_label = QLabel(
+            "TallyPrime data tables, forms, and visualizations will appear here.\n\n"
+            "• Ledger listings with professional tables\n"
+            "• Balance sheets and financial reports\n"
+            "• Data entry forms for vouchers\n"
+            "• Real-time data operations"
+        )
+        desc_label.setAlignment(Qt.AlignCenter)
+        desc_label.setStyleSheet("color: #6c757d; font-size: 12px; margin: 10px;")
+        
+        layout.addWidget(content_label)
+        layout.addWidget(desc_label)
+        layout.addStretch()
+        
+        return widget
+    
+    def _connect_dock_widget_actions(self):
+        """
+        Connect dock widget visibility to menu actions.
+        
+        Learning: This creates bidirectional sync between menu checkboxes
+        and dock widget visibility state.
+        """
+        # Control Panel visibility sync
+        self.control_panel_action.triggered.connect(
+            lambda checked: self.control_panel_dock.setVisible(checked)
+        )
+        self.control_panel_dock.visibilityChanged.connect(
+            self.control_panel_action.setChecked
+        )
+        
+        # Log Panel visibility sync
+        self.log_panel_action.triggered.connect(
+            lambda checked: self.log_panel_dock.setVisible(checked)
+        )
+        self.log_panel_dock.visibilityChanged.connect(
+            self.log_panel_action.setChecked
+        )
+    
+    def _add_log_entry(self, message: str, level: str = "info"):
+        """
+        Add an entry to the log display with timestamp and styling.
+        
+        Args:
+            message: Log message to display
+            level: Log level (info, success, warning, error)
+        """
+        from datetime import datetime
+        
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        # Color coding based on log level
+        colors = {
+            "info": "#3498db",      # Blue
+            "success": "#27ae60",   # Green  
+            "warning": "#f39c12",   # Orange
+            "error": "#e74c3c"      # Red
+        }
+        
+        color = colors.get(level, "#ecf0f1")
+        
+        formatted_entry = f'<span style="color: {color}">{timestamp} - {message}</span>'
+        self.log_display.append(formatted_entry)
+        
+        # Auto-scroll to bottom
+        cursor = self.log_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.log_display.setTextCursor(cursor)
     
     def _create_placeholder_panel(self, title: str, description: str) -> QWidget:
         """
@@ -366,3 +671,24 @@ class MainWindow(QMainWindow):
         """Handle Test Connection toolbar action."""
         self.status_bar.showMessage("Testing TallyPrime connection...")
         self.logger.info("Test Connection action triggered")
+        self._add_log_entry("🔍 Testing TallyPrime connection...", "info")
+    
+    # New action handlers for control panel buttons
+    
+    def _on_view_ledgers(self):
+        """Handle View Ledgers action."""
+        self.status_bar.showMessage("Loading ledger data from TallyPrime...")
+        self.logger.info("View Ledgers action triggered")
+        self._add_log_entry("📋 Loading ledger data from TallyPrime...", "info")
+    
+    def _on_balance_sheet(self):
+        """Handle Balance Sheet action."""
+        self.status_bar.showMessage("Generating balance sheet report...")
+        self.logger.info("Balance Sheet action triggered")
+        self._add_log_entry("📊 Generating balance sheet report...", "info")
+    
+    def _on_export_data(self):
+        """Handle Export Data action."""
+        self.status_bar.showMessage("Preparing data export...")
+        self.logger.info("Export Data action triggered")
+        self._add_log_entry("💾 Preparing data export...", "info")
