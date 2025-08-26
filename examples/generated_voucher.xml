@@ -1,0 +1,62 @@
+<ENVELOPE>
+    <HEADER>
+        <TALLYREQUEST>Import Data</TALLYREQUEST>
+    </HEADER>
+    <BODY>
+        <IMPORTDATA>
+            <REQUESTDESC>
+                <REPORTNAME>Vouchers</REPORTNAME>
+            </REQUESTDESC>
+            <REQUESTDATA>
+                <TALLYMESSAGE xmlns:UDF="TallyUDF">
+                    <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+                        <DATE>20240817</DATE>
+                        <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
+                        <VOUCHERNUMBER>ISPL/2024/005</VOUCHERNUMBER>
+                        <NARRATION>Purchase Invoice from RK Electricals - Electrical materials</NARRATION>
+                        
+                        <!-- Supplier Account (Credit Entry) -->
+                        <!-- Amount we owe to supplier -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>RK Electricals</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+                            <AMOUNT>484.0</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        
+                        <!-- Purchase Account (Debit Entry) -->
+                        <!-- Our purchase expense -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>18% Local Purchases</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-410.0</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        
+                        <!-- CGST Input (Debit Entry) -->
+                        <!-- Input tax credit we can claim -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>CGST Input</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-36.9</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        
+                        <!-- SGST Input (Debit Entry) -->
+                        <!-- Input tax credit we can claim -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>SGST Input</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-36.9</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                        
+                        <!-- Round Off Entry (Debit Entry) -->
+                        <!-- Handles small differences due to rounding -->
+                        <ALLLEDGERENTRIES.LIST>
+                            <LEDGERNAME>Round Off</LEDGERNAME>
+                            <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                            <AMOUNT>-0.2</AMOUNT>
+                        </ALLLEDGERENTRIES.LIST>
+                    </VOUCHER>
+                </TALLYMESSAGE>
+            </REQUESTDATA>
+        </IMPORTDATA>
+    </BODY>
+</ENVELOPE>
