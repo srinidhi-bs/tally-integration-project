@@ -321,6 +321,14 @@ THEME_COLORS = {
 - **Logging**: Professional logging with multiple levels and handlers
 - **Comments**: Educational comments explaining complex Qt6 concepts
 
+#### Test File Organization
+- **ALL test files must be placed in the `tally_gui_app/tests/` directory structure**
+- **Unit tests**: Place in `tests/unit/` directory
+- **Integration tests**: Place in `tests/integration/` directory
+- **Widget tests**: Place in `tests/unit/` with descriptive names like `test_connection_widget.py`
+- **Manual tests**: Place in `tests/integration/` for interactive testing
+- **NEVER create test files in the project root or other directories**
+
 ---
 
 ## 📚 ADVANCED LEARNING OBJECTIVES

@@ -27,8 +27,16 @@ from PySide6.QtWidgets import (
     QSizePolicy, QSplitter, QDockWidget, QTextEdit, QPushButton,
     QFrame, QGroupBox
 )
+
+# Import our professional connection widget
+from .widgets.connection_widget import ConnectionWidget
+
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
 from PySide6.QtGui import QAction, QKeySequence, QFont
+
+# Import TallyPrime integration components
+from core.tally.connector import TallyConnector, TallyConnectionConfig
+from app.settings import SettingsManager
 
 
 class MainWindow(QMainWindow):
@@ -80,6 +88,11 @@ class MainWindow(QMainWindow):
         self.control_panel_dock: Optional[QDockWidget] = None
         self.log_panel_dock: Optional[QDockWidget] = None
         
+        # TallyPrime integration components
+        self.tally_connector: Optional[TallyConnector] = None
+        self.settings_manager: Optional[SettingsManager] = None
+        self.connection_widget: Optional[ConnectionWidget] = None
+        
         # Initialize the window
         self._setup_window_properties()
         self._create_menu_bar()
@@ -87,6 +100,7 @@ class MainWindow(QMainWindow):
         self._create_central_widget()
         self._create_dock_widgets()
         self._create_status_bar()
+        self._setup_tally_integration()
         self._restore_window_state()
         
         self.logger.info("Main window initialized successfully")
@@ -244,9 +258,14 @@ class MainWindow(QMainWindow):
         self.control_panel_dock = QDockWidget("Control Panel", self)
         self.control_panel_dock.setObjectName("ControlPanelDock")  # Important for state saving
         
-        # Create the control panel content
-        control_panel_content = self._create_control_panel_content()
-        self.control_panel_dock.setWidget(control_panel_content)
+        # Create the professional connection widget
+        self.connection_widget = ConnectionWidget()
+        self.control_panel_dock.setWidget(self.connection_widget)
+        
+        # Connect connection widget signals to main window handlers
+        self.connection_widget.connection_test_requested.connect(self._on_test_connection)
+        self.connection_widget.settings_dialog_requested.connect(self._on_settings)
+        self.connection_widget.refresh_data_requested.connect(self._on_refresh)
         
         # Set dock widget properties
         self.control_panel_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -283,104 +302,42 @@ class MainWindow(QMainWindow):
         
         self.logger.info("Dock widgets created: Control Panel (left) and Log Panel (right)")
     
-    def _create_control_panel_content(self) -> QWidget:
+    def _setup_tally_integration(self):
         """
-        Create the content for the control panel dock widget.
+        Set up TallyPrime integration components
         
-        This panel contains:
-        - Connection status and controls
-        - TallyPrime operation buttons
-        - Quick action shortcuts
+        This method initializes:
+        - SettingsManager for configuration management
+        - TallyConnector for TallyPrime communication
+        - Integration with the connection widget
         
-        Returns:
-            QWidget: Configured control panel content
+        Learning: Separating initialization logic improves code organization
         """
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(8)
-        layout.setContentsMargins(8, 8, 8, 8)
-        
-        # Connection Status Group
-        connection_group = QGroupBox("Connection Status")
-        connection_layout = QVBoxLayout(connection_group)
-        
-        # Connection status display
-        status_label = QLabel("● Not Connected")
-        status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        connection_layout.addWidget(status_label)
-        
-        company_label = QLabel("Company: Not Connected")
-        company_label.setStyleSheet("color: #6c757d; font-size: 11px;")
-        connection_layout.addWidget(company_label)
-        
-        # Connection action buttons
-        test_conn_btn = QPushButton("🔍 Test Connection")
-        test_conn_btn.clicked.connect(self._on_test_connection)
-        connection_layout.addWidget(test_conn_btn)
-        
-        refresh_btn = QPushButton("🔄 Refresh Data")
-        refresh_btn.clicked.connect(self._on_refresh)
-        connection_layout.addWidget(refresh_btn)
-        
-        settings_btn = QPushButton("⚙️ Connection Settings")
-        settings_btn.clicked.connect(self._on_settings)
-        connection_layout.addWidget(settings_btn)
-        
-        layout.addWidget(connection_group)
-        
-        # Data Operations Group
-        data_group = QGroupBox("Data Operations")
-        data_layout = QVBoxLayout(data_group)
-        
-        ledger_btn = QPushButton("📋 View Ledgers")
-        ledger_btn.clicked.connect(self._on_view_ledgers)
-        data_layout.addWidget(ledger_btn)
-        
-        balance_btn = QPushButton("📊 Balance Sheet")
-        balance_btn.clicked.connect(self._on_balance_sheet)
-        data_layout.addWidget(balance_btn)
-        
-        export_btn = QPushButton("💾 Export Data")
-        export_btn.clicked.connect(self._on_export_data)
-        data_layout.addWidget(export_btn)
-        
-        layout.addWidget(data_group)
-        
-        # Add stretch to push content to top
-        layout.addStretch()
-        
-        # Style the panel
-        widget.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #bdc3c7;
-                border-radius: 6px;
-                margin: 4px 0px;
-                padding-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 8px;
-                padding: 0 4px 0 4px;
-            }
-            QPushButton {
-                background-color: #3498db;
-                border: none;
-                color: white;
-                padding: 8px;
-                border-radius: 4px;
-                font-weight: bold;
-                text-align: left;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #21618c;
-            }
-        """)
-        
-        return widget
+        try:
+            # Initialize settings manager
+            self.settings_manager = SettingsManager()
+            
+            # Get connection configuration from settings
+            connection_config = self.settings_manager.connection_config
+            
+            # Initialize TallyConnector with configuration
+            self.tally_connector = TallyConnector(connection_config)
+            
+            # Connect TallyConnector to connection widget
+            if self.connection_widget:
+                self.connection_widget.set_tally_connector(self.tally_connector)
+                self.connection_widget.set_settings_manager(self.settings_manager)
+            
+            # Connect TallyConnector signals to main window
+            self.tally_connector.connection_status_changed.connect(self._on_tally_status_changed)
+            self.tally_connector.company_info_received.connect(self._on_company_info_received)
+            self.tally_connector.error_occurred.connect(self._on_tally_error)
+            
+            self.logger.info("TallyPrime integration components initialized successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize TallyPrime integration: {str(e)}")
+    
     
     def _create_log_panel_content(self) -> QWidget:
         """
@@ -668,10 +625,17 @@ class MainWindow(QMainWindow):
         self.logger.info("About action triggered")
     
     def _on_test_connection(self):
-        """Handle Test Connection toolbar action."""
+        """Handle Test Connection action from toolbar or connection widget."""
         self.status_bar.showMessage("Testing TallyPrime connection...")
         self.logger.info("Test Connection action triggered")
         self._add_log_entry("🔍 Testing TallyPrime connection...", "info")
+        
+        # If we have a TallyConnector, use it for the test
+        if self.tally_connector:
+            self.tally_connector.test_connection()
+        else:
+            self.logger.warning("TallyConnector not available for connection test")
+            self._add_log_entry("⚠ TallyConnector not initialized", "warning")
     
     # New action handlers for control panel buttons
     
@@ -692,3 +656,61 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Preparing data export...")
         self.logger.info("Export Data action triggered")
         self._add_log_entry("💾 Preparing data export...", "info")
+    
+    # TallyPrime integration signal handlers
+    
+    def _on_tally_status_changed(self, status, message: str = ""):
+        """
+        Handle TallyPrime connection status changes
+        
+        Args:
+            status: Connection status
+            message: Status message
+        """
+        # Update status bar with connection information
+        if hasattr(status, 'value'):
+            status_text = f"TallyPrime: {status.value.title()}"
+        else:
+            status_text = f"TallyPrime: {str(status)}"
+        
+        if message:
+            status_text += f" - {message}"
+        
+        self.status_bar.showMessage(status_text)
+        
+        # Add log entry
+        log_message = f"🔗 Connection status: {status_text}"
+        log_level = "success" if "connected" in status_text.lower() else "info"
+        self._add_log_entry(log_message, log_level)
+        
+        self.logger.info(f"TallyPrime status changed: {status}")
+    
+    def _on_company_info_received(self, company_info):
+        """
+        Handle company information received from TallyPrime
+        
+        Args:
+            company_info: Company information object
+        """
+        company_name = getattr(company_info, 'name', 'Unknown Company')
+        message = f"📊 Company info received: {company_name}"
+        
+        self._add_log_entry(message, "success")
+        self.status_bar.showMessage(f"Connected to {company_name}")
+        
+        self.logger.info(f"Company information received: {company_name}")
+    
+    def _on_tally_error(self, error_type: str, error_message: str):
+        """
+        Handle TallyPrime connection errors
+        
+        Args:
+            error_type: Type of error
+            error_message: Error message
+        """
+        error_text = f"⚠ TallyPrime Error: {error_message}"
+        
+        self._add_log_entry(error_text, "error")
+        self.status_bar.showMessage(f"Error: {error_message}")
+        
+        self.logger.error(f"TallyPrime error: {error_type} - {error_message}")

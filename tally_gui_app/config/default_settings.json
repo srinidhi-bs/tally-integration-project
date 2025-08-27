@@ -6,7 +6,7 @@
         "window_title": "TallyPrime Integration Manager - Professional Desktop Application"
     },
     "tally_connection": {
-        "default_host": "localhost",
+        "default_host": "172.28.208.1",
         "default_port": 9000,
         "timeout_seconds": 30,
         "retry_attempts": 3,

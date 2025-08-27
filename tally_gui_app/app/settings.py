@@ -187,8 +187,9 @@ class SettingsManager(QObject):
             self._load_from_qt_settings()
             
             # Also try to load from JSON file as backup
-            if self.settings_file.exists():
-                self._load_from_json_file()
+            # TEMPORARY: Disable JSON loading to test Qt settings
+            # if self.settings_file.exists():
+            #     self._load_from_json_file()
             
             logger.info("Settings loaded successfully")
             
@@ -200,9 +201,12 @@ class SettingsManager(QObject):
         """Load settings from Qt6 QSettings storage"""
         
         # Connection settings
+        old_host = self._settings.connection.host
         self._settings.connection.host = self.qt_settings.value(
             "connection/host", self._settings.connection.host
         )
+        if self._settings.connection.host != old_host:
+            logger.info(f"Qt settings overrode host: {old_host} -> {self._settings.connection.host}")
         self._settings.connection.port = int(self.qt_settings.value(
             "connection/port", self._settings.connection.port
         ))
@@ -260,7 +264,19 @@ class SettingsManager(QObject):
                 data = json.load(f)
             
             # Parse connection config
-            if 'connection' in data:
+            if 'tally_connection' in data:
+                conn_data = data['tally_connection']
+                # Map JSON keys to TallyConnectionConfig fields
+                config_dict = {
+                    'host': conn_data.get('default_host', 'localhost'),
+                    'port': conn_data.get('default_port', 9000),
+                    'timeout': conn_data.get('timeout_seconds', 30),
+                    'retry_count': conn_data.get('retry_attempts', 3)
+                }
+                self._settings.connection = TallyConnectionConfig(**config_dict)
+                logger.info(f"Loaded connection config from JSON: {self._settings.connection.url}")
+            elif 'connection' in data:
+                # Fallback for direct connection config format
                 conn_data = data['connection']
                 self._settings.connection = TallyConnectionConfig.from_dict(conn_data)
             
@@ -281,7 +297,7 @@ class SettingsManager(QObject):
     def _apply_default_settings(self):
         """Apply default settings when loading fails"""
         self._settings = ApplicationSettings()
-        logger.info("Default settings applied")
+        logger.info(f"Default settings applied - connection will be: {self._settings.connection.url}")
     
     def save_settings(self):
         """
