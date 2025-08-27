@@ -403,6 +403,92 @@ Professional connection configuration dialog fully integrated with main applicat
 
 ---
 
+### Task 2.4: Dark Theme Support for Windows 11 ✅ COMPLETED
+**Priority**: HIGH  
+**Estimated Time**: 90 minutes  
+**Actual Time**: 120 minutes  
+**Completed**: August 27, 2025  
+
+#### Subtasks:
+- [x] Fix dark theme compatibility issues in connection dialog
+- [x] Update connection widget styling for dark theme support  
+- [x] Create centralized theme detection and dynamic styling system
+- [x] Implement professional color schemes for both light and dark themes
+- [x] Add automatic Windows theme detection using Qt palette system
+- [x] Enable dynamic theme switching without application restart
+- [x] Test application in both light and dark Windows themes
+- [x] Create comprehensive manual testing framework
+
+#### Deliverables:
+```python
+# ui/resources/styles/theme_manager.py - Centralized theme management (350+ lines)
+# Professional ThemeManager class with automatic theme detection
+# Dynamic color scheme generation for light and dark themes
+# Signal-slot communication for real-time theme updates
+# Professional color palettes with high contrast ratios
+# tests/manual/test_dark_theme.py - Comprehensive theme testing (250+ lines)
+```
+
+#### Testing Criteria:
+- [x] All text clearly visible in Windows 11 dark mode
+- [x] Professional appearance in both light and dark themes
+- [x] Automatic theme detection works correctly
+- [x] Dynamic theme switching without restart
+- [x] Connection dialog fully readable in dark mode
+- [x] Connection widget properly styled in dark mode
+- [x] High contrast ratios for accessibility
+- [x] Professional business appearance maintained
+
+#### Acceptance Criteria:
+✅ Perfect text visibility in Windows 11 dark mode  
+✅ Professional appearance in both light and dark themes  
+✅ Automatic theme detection and switching  
+✅ Centralized theme management system  
+
+**Completion Summary:**
+- ✅ Fixed Windows 11 dark mode visibility issues from user screenshot
+- ✅ Implemented automatic theme detection using Qt palette system  
+- ✅ Created professional ThemeManager class with centralized color management
+- ✅ Built dynamic theme switching with real-time updates via Qt signals
+- ✅ Enhanced connection dialog with proper dark theme styling
+- ✅ Updated connection widget for dark theme compatibility
+- ✅ Created comprehensive manual testing framework with live theme switching
+- ✅ Applied professional color schemes: Light (#f8f9fa/#2c3e50) Dark (#2d3748/#f7fafc)
+- ✅ Achieved high contrast ratios for excellent readability
+- ✅ Maintained business-class appearance in both themes
+
+**Files Created/Modified:**
+- `ui/resources/styles/theme_manager.py` - Professional theme management system (350 lines)
+- `ui/dialogs/connection_dialog.py` - Enhanced with centralized theme manager integration
+- `ui/widgets/connection_widget.py` - Added comprehensive dark theme support
+- `tests/manual/test_dark_theme.py` - Comprehensive theme testing framework (250 lines)
+
+**Technical Achievements:**
+- Automatic Windows 11 theme detection using Qt QPalette system
+- Professional color palettes with scientifically chosen contrast ratios
+- Dynamic CSS generation based on current system theme
+- Real-time theme updates via Qt signal-slot communication
+- Centralized theme management with consistent styling across components
+- Professional business appearance maintained in both light and dark modes
+- Comprehensive manual testing with live theme switching capabilities
+
+**User Benefits:**
+- Perfect text visibility regardless of Windows theme setting
+- Professional business appearance in all lighting conditions  
+- No configuration needed - follows Windows theme automatically
+- Immediate theme updates when Windows theme changes
+- Accessible high-contrast design for all users
+
+**Problem Solved:**
+✅ Fixed the exact issue shown in user screenshot where text was invisible in Windows 11 dark mode
+✅ All labels, inputs, and UI elements now clearly visible with proper contrast
+✅ Professional appearance maintained across all Windows theme settings
+
+**🏆 TASK 2.4: DARK THEME SUPPORT FOR WINDOWS 11 - COMPLETE!**
+Professional dark theme compatibility with automatic detection and switching.
+
+---
+
 ## 📋 PHASE 3: DATA READING AND DISPLAY SYSTEM
 
 ### Task 3.1: Data Models and Core Reading Framework

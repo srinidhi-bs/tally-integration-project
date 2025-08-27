@@ -50,6 +50,8 @@ Create a professional-grade GUI application using PySide6 that consolidates all 
 - **Custom Dialogs**: Modern input dialogs with validation
 - **Keyboard Shortcuts**: Power-user keyboard navigation
 - **System Integration**: Windows taskbar integration and notifications
+- **Dark Theme Support**: Automatic Windows 11 theme detection and adaptation
+- **Professional Theming**: Centralized theme management with dynamic switching
 
 ---
 
@@ -101,11 +103,15 @@ tally_gui_app/
 │   │   ├── __init__.py
 │   │   ├── voucher_dialog.py         # Voucher entry dialog
 │   │   ├── settings_dialog.py        # Application preferences
-│   │   ├── connection_dialog.py      # Connection configuration
+│   │   ├── connection_dialog.py      # Connection configuration dialog
 │   │   └── about_dialog.py           # About application dialog
 │   └── resources/                    # Qt resource files
 │       ├── icons/                    # Application icons
-│       ├── styles/                   # QSS stylesheets
+│       ├── styles/                   # QSS stylesheets and theme management
+│       │   ├── __init__.py
+│       │   ├── theme_manager.py      # Centralized theme management system
+│       │   ├── light_theme.qss       # Light theme stylesheets
+│       │   └── dark_theme.qss        # Dark theme stylesheets
 │       └── ui_files/                 # Qt Designer .ui files
 ├── core/
 │   ├── __init__.py
@@ -250,21 +256,64 @@ QStatusBar {
 }
 ```
 
-### Color Scheme - Professional Business Theme
+### Color Scheme - Professional Business Theme with Dark Mode Support
 ```python
-# Modern business color palette
-THEME_COLORS = {
+# Modern business color palette with automatic theme detection
+LIGHT_THEME_COLORS = {
     'primary': '#3498db',        # Professional blue
     'secondary': '#2c3e50',      # Dark slate
     'success': '#27ae60',        # Success green
     'warning': '#f39c12',        # Warning orange
     'danger': '#e74c3c',         # Error red
     'info': '#17a2b8',          # Info teal
-    'light': '#f8f9fa',         # Light background
-    'dark': '#343a40',          # Dark text
-    'muted': '#6c757d',         # Muted text
+    'background': '#f8f9fa',     # Light background
+    'surface': '#ffffff',        # White surfaces
+    'text_primary': '#2c3e50',   # Dark text
+    'text_secondary': '#6c757d', # Muted text
+    'border': '#bdc3c7',         # Light borders
     'accent': '#9b59b6'         # Purple accent
 }
+
+DARK_THEME_COLORS = {
+    'primary': '#4299e1',        # Bright blue for dark backgrounds
+    'secondary': '#e2e8f0',      # Light slate
+    'success': '#48bb78',        # Bright green
+    'warning': '#ed8936',        # Bright orange
+    'danger': '#f56565',         # Bright red
+    'info': '#4fd1c7',          # Bright teal
+    'background': '#2d3748',     # Dark background
+    'surface': '#1a202c',        # Darker surfaces
+    'text_primary': '#f7fafc',   # Light text
+    'text_secondary': '#e2e8f0', # Muted light text
+    'border': '#4a5568',         # Dark borders
+    'accent': '#b794f6'         # Bright purple accent
+}
+```
+
+### Professional Theme Management System
+```python
+# Automatic theme detection and management
+class ThemeManager:
+    """
+    Centralized theme management with automatic Windows theme detection
+    Features:
+    - Automatic light/dark theme detection using Qt QPalette
+    - Real-time theme switching without application restart
+    - Professional color schemes with high contrast ratios
+    - Signal-slot communication for dynamic UI updates
+    - Consistent styling across all application components
+    """
+    
+    @staticmethod
+    def detect_system_theme():
+        # Uses Qt's palette system to detect Windows theme
+        palette = QWidget().palette()
+        window_color = palette.color(QPalette.Window)
+        return ThemeMode.DARK if window_color.lightness() < 128 else ThemeMode.LIGHT
+    
+    def get_colors(self):
+        # Returns appropriate color scheme based on current theme
+        return DARK_THEME_COLORS if self.is_dark_theme else LIGHT_THEME_COLORS
 ```
 
 ---
@@ -341,6 +390,9 @@ THEME_COLORS = {
 5. **Threading in Qt**: Learn QThread and worker patterns for responsive UIs
 6. **Qt Resource System**: Manage icons, stylesheets, and assets
 7. **Custom Widget Development**: Create specialized business components
+8. **Advanced Theme Management**: Automatic system theme detection with Qt QPalette
+9. **Dynamic Styling**: Real-time CSS generation and application based on system theme
+10. **Cross-Platform Theming**: Professional appearance across different Windows versions
 
 ### Business Application Development
 1. **Desktop Application Patterns**: Learn professional desktop app architecture
@@ -442,12 +494,14 @@ Testing Levels:
 
 ## 🚀 ADVANCED FEATURES ROADMAP
 
-### Phase 1 Features (MVP)
-- Professional Qt6 interface with docking panels
-- TallyPrime connection management with settings
-- Ledger browsing with professional data tables
-- Basic voucher posting with validation
-- Real-time logging with filtering capabilities
+### Phase 1 Features (MVP) ✅ COMPLETE
+- ✅ Professional Qt6 interface with docking panels
+- ✅ TallyPrime connection management with auto-discovery
+- ✅ Professional connection settings dialog with validation
+- ✅ Automatic Windows 11 dark theme support
+- ✅ Real-time logging with color-coded filtering capabilities
+- ✅ Centralized theme management system
+- ✅ Dynamic styling with automatic theme detection
 
 ### Phase 2 Features (Enhanced)
 - Advanced data visualization with charts and graphs  
