@@ -30,6 +30,7 @@ from PySide6.QtGui import QPalette, QFont
 # Import our TallyConnector and related classes  
 from core.tally.connector import TallyConnector, ConnectionStatus, TallyConnectionConfig
 from app.settings import SettingsManager
+from ui.resources.styles.theme_manager import get_theme_manager
 
 
 class ConnectionStatusIndicator(QLabel):
@@ -353,47 +354,31 @@ class ConnectionWidget(QWidget):
     
     def _setup_styling(self):
         """
-        Set up the professional styling for the widget
+        Set up the professional styling for the widget with dark theme support
         
-        Learning: Comprehensive CSS styling for professional appearance
+        Learning: Using centralized theme manager for consistent styling
         """
-        self.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                margin: 4px 0px;
-                padding-top: 12px;
-                background-color: #ffffff;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 8px;
-                padding: 0 6px 0 6px;
-                color: #2c3e50;
-                background-color: #ffffff;
-            }
-            QPushButton {
-                background-color: #3498db;
-                border: none;
-                color: white;
-                padding: 10px;
-                border-radius: 6px;
-                font-weight: bold;
-                text-align: left;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #21618c;
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }
-        """)
+        # Use centralized theme manager
+        theme_manager = get_theme_manager()
+        stylesheet = theme_manager.get_stylesheet_for_widget('connection_widget')
+        self.setStyleSheet(stylesheet)
+        
+        # Connect to theme changes for dynamic updates
+        theme_manager.theme_changed.connect(self._on_theme_changed)
+    
+    def _on_theme_changed(self, theme_mode):
+        """
+        Handle theme changes for dynamic theme switching
+        
+        Args:
+            theme_mode: New theme mode
+        """
+        # Reapply styling with new theme
+        theme_manager = get_theme_manager()
+        stylesheet = theme_manager.get_stylesheet_for_widget('connection_widget')
+        self.setStyleSheet(stylesheet)
+        
+        self.logger.info(f"Connection widget theme changed to: {theme_mode.value}")
     
     def _setup_connections(self):
         """
