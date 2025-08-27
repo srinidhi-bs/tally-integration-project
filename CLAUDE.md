@@ -546,7 +546,7 @@ Testing Levels:
 
 **Learning Philosophy**: 
 This project serves as both a functional business application and an comprehensive learning platform for professional desktop development using modern Qt6 framework. Every aspect is documented for educational value while maintaining professional software standards.
-
+**Please update the completion status of each sub-task in the TODO.md file before starting the next sub-task.**
 ---
 
 *This comprehensive specification document will evolve throughout the development process, incorporating lessons learned, user feedback, and technical discoveries. It represents our commitment to creating both an excellent learning experience and a professional-quality business application.*

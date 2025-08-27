@@ -30,7 +30,7 @@ import logging
 
 # Qt6 imports for model integration
 from PySide6.QtCore import (QObject, QAbstractTableModel, QAbstractItemModel, 
-                           Qt, QModelIndex, QVariant, QPersistentModelIndex)
+                           Qt, QModelIndex, QPersistentModelIndex)
 from PySide6.QtGui import QIcon, QColor
 
 # Set up logger for this module
@@ -524,7 +524,7 @@ class LedgerTableModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         """Return data for display"""
         if not index.isValid() or index.row() >= len(self.ledgers):
-            return QVariant()
+            return None
         
         ledger = self.ledgers[index.row()]
         column = index.column()
@@ -575,13 +575,13 @@ class LedgerTableModel(QAbstractTableModel):
                     tooltip_parts.append(f"YTD Credits: {ledger.balance.ytd_credit:,.2f}")
                 return "\n".join(tooltip_parts)
         
-        return QVariant()
+        return None
     
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """Return header data"""
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self.headers[section]
-        return QVariant()
+        return None
     
     def update_ledgers(self, ledgers: List[LedgerInfo]):
         """
@@ -740,7 +740,7 @@ class LedgerTreeModel(QAbstractItemModel):
     def data(self, index, role=Qt.DisplayRole):
         """Return data for display"""
         if not index.isValid():
-            return QVariant()
+            return None
         
         item = index.internalPointer()
         column = index.column()
@@ -759,13 +759,13 @@ class LedgerTreeModel(QAbstractItemModel):
                 elif column == 2:
                     return item.ledger_type.value.replace('_', ' ').title()
         
-        return QVariant()
+        return None
     
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """Return header data"""
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self.headers[section]
-        return QVariant()
+        return None
     
     def update_ledgers(self, ledgers: List[LedgerInfo]):
         """
