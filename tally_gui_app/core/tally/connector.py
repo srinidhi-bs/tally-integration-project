@@ -57,6 +57,9 @@ class TallyConnectionConfig:
     retry_count: int = 3        # Number of retry attempts
     retry_delay: float = 1.0    # Delay between retries in seconds
     user_agent: str = "TallyPrime Integration Manager v1.0"
+    enable_pooling: bool = True  # Enable connection pooling for performance
+    auto_discover: bool = False  # Enable automatic TallyPrime discovery
+    verbose_logging: bool = False  # Enable verbose logging for debugging
     
     @property
     def url(self) -> str:
@@ -71,7 +74,10 @@ class TallyConnectionConfig:
             'timeout': self.timeout,
             'retry_count': self.retry_count,
             'retry_delay': self.retry_delay,
-            'user_agent': self.user_agent
+            'user_agent': self.user_agent,
+            'enable_pooling': self.enable_pooling,
+            'auto_discover': self.auto_discover,
+            'verbose_logging': self.verbose_logging
         }
     
     @classmethod
@@ -216,6 +222,60 @@ class TallyConnector(QObject):
             'current_status': self._status.value,
             'url': self.config.url
         }
+    
+    def update_config(self, new_config: TallyConnectionConfig):
+        """
+        Update the connection configuration with new settings
+        
+        This method allows dynamic reconfiguration of the TallyConnector
+        without recreating the instance. Useful for settings dialog updates.
+        
+        Args:
+            new_config: New TallyPrime connection configuration
+            
+        Learning: This method demonstrates how to safely update configuration
+        while maintaining existing connections and state where possible.
+        """
+        try:
+            logger.info(f"Updating connection configuration from {self.config.host}:{self.config.port} "
+                       f"to {new_config.host}:{new_config.port}")
+            
+            # Store old configuration for comparison
+            old_config = self.config
+            
+            # Update the configuration
+            self.config = new_config
+            
+            # Update session headers with new user agent if changed
+            if old_config.user_agent != new_config.user_agent:
+                self.session.headers.update({
+                    'User-Agent': new_config.user_agent
+                })
+            
+            # If host or port changed, disconnect and clear cached data
+            if (old_config.host != new_config.host or 
+                old_config.port != new_config.port):
+                
+                # Reset connection status
+                self._set_status(ConnectionStatus.DISCONNECTED, 
+                               "Configuration updated - ready to connect")
+                
+                # Clear cached company information
+                self._company_info = None
+                
+                logger.info("Connection configuration updated - host/port changed")
+                
+            else:
+                # Just timeout or retry settings changed
+                logger.info("Connection configuration updated - performance settings changed")
+                
+            # Emit signal to notify UI of configuration change
+            self.connection_status_changed.emit(self._status, 
+                                              f"Settings updated: {new_config.host}:{new_config.port}")
+            
+        except Exception as e:
+            logger.error(f"Error updating connection configuration: {str(e)}")
+            self.error_occurred.emit("CONFIG_UPDATE_ERROR", str(e))
     
     def _set_status(self, status: ConnectionStatus, message: str = ""):
         """

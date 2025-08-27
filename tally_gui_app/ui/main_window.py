@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 # Import our professional connection widget
 from .widgets.connection_widget import ConnectionWidget
+from .dialogs.connection_dialog import ConnectionDialog
 
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
 from PySide6.QtGui import QAction, QKeySequence, QFont
@@ -615,9 +616,64 @@ class MainWindow(QMainWindow):
         self.logger.info("Refresh action triggered")
     
     def _on_settings(self):
-        """Handle Settings menu action."""
-        self.status_bar.showMessage("Settings action triggered")
-        self.logger.info("Settings action triggered")
+        """
+        Handle Settings menu action and connection settings dialog request.
+        
+        This method creates and shows the professional connection settings dialog
+        with all current settings pre-loaded for user modification.
+        """
+        try:
+            # Create connection settings dialog
+            dialog = ConnectionDialog(parent=self, settings_manager=self.settings_manager)
+            
+            # Connect dialog signals to handle configuration changes
+            dialog.connection_config_changed.connect(self._on_connection_config_changed)
+            
+            # Show the dialog modally
+            result = dialog.exec()
+            
+            if result == ConnectionDialog.Accepted:
+                self.status_bar.showMessage("Connection settings updated successfully", 3000)
+                self.logger.info("Connection settings updated through dialog")
+                
+                # Update the connection widget with new settings
+                if self.connection_widget and self.tally_connector:
+                    # Re-initialize TallyConnector with new configuration
+                    new_config = self.settings_manager.connection_config
+                    self.tally_connector.update_config(new_config)
+                    
+            else:
+                self.status_bar.showMessage("Connection settings dialog cancelled", 2000)
+                self.logger.info("Connection settings dialog was cancelled")
+                
+        except Exception as e:
+            self.logger.error(f"Error opening connection settings dialog: {str(e)}")
+            self.status_bar.showMessage(f"Error opening settings: {str(e)}", 5000)
+    
+    def _on_connection_config_changed(self, new_config: TallyConnectionConfig):
+        """
+        Handle connection configuration changes from the settings dialog.
+        
+        Args:
+            new_config: New TallyPrime connection configuration
+        """
+        try:
+            self.logger.info(f"Connection configuration changed to: {new_config.host}:{new_config.port}")
+            
+            # Update TallyConnector with new configuration
+            if self.tally_connector:
+                self.tally_connector.update_config(new_config)
+            
+            # Log the configuration change
+            self._add_log_entry(
+                f"🔧 Connection settings updated: {new_config.host}:{new_config.port} "
+                f"(timeout: {new_config.timeout}s)", 
+                "info"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error updating connection configuration: {str(e)}")
+            self._add_log_entry(f"❌ Error updating connection settings: {str(e)}", "error")
     
     def _on_about(self):
         """Handle About menu action."""
