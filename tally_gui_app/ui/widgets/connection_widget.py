@@ -171,6 +171,11 @@ class ConnectionWidget(QWidget):
     settings_dialog_requested = Signal()
     refresh_data_requested = Signal()
     
+    # Data operation signals
+    load_ledgers_requested = Signal()
+    load_balance_sheet_requested = Signal()
+    load_recent_transactions_requested = Signal()
+    
     def __init__(self, parent: Optional[QWidget] = None):
         """
         Initialize the connection widget
@@ -228,6 +233,9 @@ class ConnectionWidget(QWidget):
         
         # Connection Actions Section
         self._create_actions_section(main_layout)
+        
+        # Data Operations Section (new)
+        self._create_data_operations_section(main_layout)
         
         # Company Information Section
         self._create_company_info_section(main_layout)
@@ -323,6 +331,39 @@ class ConnectionWidget(QWidget):
         actions_layout.addWidget(self.settings_btn)
         
         parent_layout.addWidget(actions_group)
+    
+    def _create_data_operations_section(self, parent_layout: QVBoxLayout):
+        """
+        Create the data operations section for loading different data types
+        
+        Args:
+            parent_layout: Parent layout to add this section to
+        """
+        data_ops_group = QGroupBox("Data Operations")
+        data_ops_layout = QVBoxLayout(data_ops_group)
+        
+        # List Ledgers Button
+        self.list_ledgers_btn = QPushButton("📋 List Ledgers")
+        self.list_ledgers_btn.clicked.connect(self._on_load_ledgers)
+        self.list_ledgers_btn.setToolTip("Load and display all ledger accounts")
+        self.list_ledgers_btn.setEnabled(False)  # Disabled until connected
+        data_ops_layout.addWidget(self.list_ledgers_btn)
+        
+        # Show Balance Sheet Button
+        self.balance_sheet_btn = QPushButton("📊 Balance Sheet")
+        self.balance_sheet_btn.clicked.connect(self._on_load_balance_sheet)
+        self.balance_sheet_btn.setToolTip("Display balance sheet data")
+        self.balance_sheet_btn.setEnabled(False)  # Disabled until connected
+        data_ops_layout.addWidget(self.balance_sheet_btn)
+        
+        # Recent Transactions Button
+        self.recent_transactions_btn = QPushButton("📈 Recent Transactions")
+        self.recent_transactions_btn.clicked.connect(self._on_load_recent_transactions)
+        self.recent_transactions_btn.setToolTip("Show recent transaction entries")
+        self.recent_transactions_btn.setEnabled(False)  # Disabled until connected
+        data_ops_layout.addWidget(self.recent_transactions_btn)
+        
+        parent_layout.addWidget(data_ops_group)
     
     def _create_company_info_section(self, parent_layout: QVBoxLayout):
         """
@@ -463,6 +504,30 @@ class ConnectionWidget(QWidget):
         self.settings_dialog_requested.emit()
         self.logger.info("Connection settings dialog requested")
     
+    def _on_load_ledgers(self):
+        """
+        Handle load ledgers button click
+        """
+        # Emit signal to request ledger data loading
+        self.load_ledgers_requested.emit()
+        self.logger.info("Ledger data loading requested")
+    
+    def _on_load_balance_sheet(self):
+        """
+        Handle load balance sheet button click
+        """
+        # Emit signal to request balance sheet data loading
+        self.load_balance_sheet_requested.emit()
+        self.logger.info("Balance sheet data loading requested")
+    
+    def _on_load_recent_transactions(self):
+        """
+        Handle load recent transactions button click
+        """
+        # Emit signal to request recent transactions data loading
+        self.load_recent_transactions_requested.emit()
+        self.logger.info("Recent transactions data loading requested")
+    
     def _on_connection_status_changed(self, status: ConnectionStatus, message: str = ""):
         """
         Handle connection status changes from TallyConnector
@@ -536,6 +601,12 @@ class ConnectionWidget(QWidget):
         
         # Settings button always enabled
         self.settings_btn.setEnabled(True)
+        
+        # Data operation buttons only enabled when connected
+        data_buttons_enabled = (status == ConnectionStatus.CONNECTED)
+        self.list_ledgers_btn.setEnabled(data_buttons_enabled)
+        self.balance_sheet_btn.setEnabled(data_buttons_enabled)
+        self.recent_transactions_btn.setEnabled(data_buttons_enabled)
     
     def _update_company_display(self):
         """

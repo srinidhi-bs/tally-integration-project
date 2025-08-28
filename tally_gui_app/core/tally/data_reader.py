@@ -478,7 +478,7 @@ class TallyDataReader(QObject):
                         <REQUESTDESC>
                             <REPORTNAME>List of Accounts</REPORTNAME>
                             <STATICVARIABLES>
-                                <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                                <SVEXPORTFORMAT>$$SysName:ASCII</SVEXPORTFORMAT>
                             </STATICVARIABLES>
                         </REQUESTDESC>
                     </EXPORTDATA>
@@ -676,7 +676,7 @@ class TallyDataReader(QObject):
             raise ValueError(error_msg)
     
     
-    async def _send_data_request(self, data_type: TallyDataType, use_cache: bool = True, **kwargs) -> TallyResponse:
+    def _send_data_request(self, data_type: TallyDataType, use_cache: bool = True, **kwargs) -> TallyResponse:
         """
         Send a data request to TallyPrime with caching and enhanced error handling
         
@@ -727,7 +727,8 @@ class TallyDataReader(QObject):
             
             # Send request via TallyConnector
             self.data_read_progress.emit(25, "Sending request to TallyPrime...")
-            response = await self.connector.send_request(xml_request)
+            description = f"Data request: {data_type.value}"
+            response = self.connector.send_xml_request(xml_request, description)
             
             self.data_read_progress.emit(60, "Processing response...")
             
@@ -771,8 +772,7 @@ class TallyDataReader(QObject):
                         data="",
                         status_code=response.status_code,
                         error_message=error_msg,
-                        response_time=response.response_time,
-                        error_details=xml_error.get_debug_info()
+                        response_time=response.response_time
                     )
                     
             else:
@@ -820,17 +820,43 @@ class TallyDataReader(QObject):
         has the expected structure, contains valid data, and is not malformed.
         It includes detection of various types of malformed XML that TallyPrime might return.
         
+        Note: LEDGER_LIST requests use ASCII format, so XML validation is skipped for them.
+        
         Args:
-            xml_data: Raw XML response string
+            xml_data: Raw XML response string (or ASCII for LEDGER_LIST)
             data_type: Expected data type for validation
             
         Returns:
-            True if XML is valid and well-formed, False otherwise
+            True if data is valid, False otherwise
             
         Raises:
             TallyXMLError: For detailed error reporting with diagnostic information
         """
         try:
+            # Skip XML validation for LEDGER_LIST as it uses ASCII format
+            if data_type == TallyDataType.LEDGER_LIST:
+                # Basic ASCII content validation
+                if not xml_data or not xml_data.strip():
+                    error = TallyXMLError(
+                        "Empty ASCII response received for ledger list",
+                        "EMPTY_ASCII_RESPONSE",
+                        xml_data
+                    )
+                    self._track_error(error)
+                    raise error
+                
+                # Check for minimum content (should have ledger names)
+                if len(xml_data.strip()) < 10:
+                    error = TallyXMLError(
+                        "ASCII ledger list response too short - may be empty or invalid",
+                        "SHORT_ASCII_RESPONSE",
+                        xml_data
+                    )
+                    self._track_error(error)
+                    raise error
+                
+                logger.debug(f"ASCII ledger list validation passed - {len(xml_data)} characters")
+                return True
             # Step 1: Basic content validation
             if not xml_data or not xml_data.strip():
                 error = TallyXMLError(
@@ -1342,7 +1368,7 @@ class TallyDataReader(QObject):
     
     # Public convenience methods for common data operations
     
-    async def get_company_info(self) -> TallyResponse:
+    def get_company_info(self) -> TallyResponse:
         """
         Retrieve company information from TallyPrime
         
@@ -1350,7 +1376,7 @@ class TallyDataReader(QObject):
             TallyResponse containing company data or error information
         """
         logger.info("Requesting company information from TallyPrime")
-        return await self._send_data_request(TallyDataType.COMPANY_INFO)
+        return self._send_data_request(TallyDataType.COMPANY_INFO)
     
     
     def parse_company_info(self, xml_data: str):
@@ -1708,7 +1734,7 @@ class TallyDataReader(QObject):
             logger.warning(f"Error parsing company statistics: {e}")
     
     
-    async def get_ledger_list(self) -> TallyResponse:
+    def get_ledger_list(self) -> TallyResponse:
         """
         Retrieve list of all ledgers from TallyPrime
         
@@ -1716,18 +1742,19 @@ class TallyDataReader(QObject):
             TallyResponse containing ledger list data or error information
         """
         logger.info("Requesting ledger list from TallyPrime")
-        return await self._send_data_request(TallyDataType.LEDGER_LIST)
+        return self._send_data_request(TallyDataType.LEDGER_LIST)
     
     
-    def parse_ledger_list(self, xml_data: str) -> List:
+    def parse_ledger_list(self, data: str) -> List:
         """
-        Parse ledger list from TallyPrime XML response
+        Parse ledger list from TallyPrime ASCII response
         
-        This method extracts ledger information from the XML response and
-        converts them into a list of structured LedgerInfo objects for GUI display.
+        This method extracts individual ledger names from the ASCII "List of Accounts" 
+        response and converts them into structured LedgerInfo objects for GUI display.
+        This approach successfully retrieves individual ledger accounts (not just groups).
         
         Args:
-            xml_data: Raw XML response containing ledger list data
+            data: Raw ASCII response containing ledger list data
             
         Returns:
             List of LedgerInfo objects or empty list if parsing fails
@@ -1737,43 +1764,66 @@ class TallyDataReader(QObject):
             LedgerType, BalanceType, classify_ledger_type
         )
         from decimal import Decimal
+        import re
         
         try:
-            # Parse XML response
-            root = self.parse_xml_response(xml_data)
-            if root is None:
-                logger.error("Failed to parse ledger list XML response")
+            if not data:
+                logger.warning("No ASCII data to parse for ledger list")
                 return []
             
+            logger.info("Parsing ASCII ledger list response...")
             ledgers = []
             
-            # Find all ledger entries in XML
-            # TallyPrime ledger list can be in different XML structures
-            ledger_elements = (
-                root.findall(".//LEDGER") +
-                root.findall(".//TALLYMESSAGE[@vchtype='Ledger']") +
-                root.findall(".//DSP_NAME")  # Sometimes ledgers are in DSP_NAME elements
-            )
+            # Split ASCII response into lines
+            lines = data.split('\n')
+            logger.debug(f"Processing {len(lines)} lines of ASCII data")
             
-            if not ledger_elements:
-                logger.warning("No ledger elements found in XML response")
-                logger.debug(f"XML structure: {ET.tostring(root, encoding='unicode')[:500]}...")
-                return []
+            # Parse each line to extract ledger names
+            for line_num, line in enumerate(lines, 1):
+                line = line.strip()
+                
+                # Skip empty lines, headers, totals, and system entries
+                if (line and 
+                    not line.startswith('List of') and 
+                    not line.startswith('Page') and
+                    not line.startswith('From') and
+                    not line.startswith('To') and
+                    not line.startswith('Total') and
+                    not line.startswith('-') and
+                    not line.startswith('=') and
+                    len(line) > 1 and
+                    not line.isdigit() and
+                    not re.match(r'^\s*\d+\.\d+\s*$', line)):  # Skip pure numbers
+                    
+                    # Clean up the line (remove trailing amounts and formatting)
+                    clean_line = re.sub(r'\s+[\d,.-]+\s*$', '', line)  # Remove trailing amounts
+                    clean_line = clean_line.strip()
+                    
+                    # Only process valid ledger names
+                    if clean_line and len(clean_line) > 2:
+                        try:
+                            # Create LedgerInfo object for this ledger
+                            ledger_info = LedgerInfo()
+                            ledger_info.name = clean_line
+                            ledger_info.guid = f"ascii_ledger_{line_num}"  # Generate unique ID
+                            
+                            # Try to classify the ledger type based on name patterns
+                            ledger_info.ledger_type = self._classify_ledger_from_name(clean_line)
+                            
+                            # Create basic balance information (actual balance would need separate query)
+                            balance = LedgerBalance()
+                            balance.current_balance = Decimal('0')
+                            balance.closing_balance = Decimal('0')
+                            balance.balance_type = BalanceType.ZERO
+                            ledger_info.balance = balance
+                            
+                            ledgers.append(ledger_info)
+                            
+                        except Exception as e:
+                            logger.debug(f"Failed to process ledger line {line_num}: '{clean_line}' - {e}")
+                            continue
             
-            logger.info(f"Found {len(ledger_elements)} ledger elements to parse")
-            
-            for i, ledger_elem in enumerate(ledger_elements):
-                try:
-                    ledger_info = self._parse_single_ledger(ledger_elem)
-                    if ledger_info:
-                        ledgers.append(ledger_info)
-                        if i % 50 == 0:  # Log progress for large lists
-                            logger.debug(f"Parsed {i+1}/{len(ledger_elements)} ledgers")
-                except Exception as e:
-                    logger.warning(f"Failed to parse ledger element {i}: {e}")
-                    continue
-            
-            logger.info(f"Successfully parsed {len(ledgers)} ledgers from XML response")
+            logger.info(f"Successfully parsed {len(ledgers)} individual ledger accounts from ASCII response")
             
             # Sort ledgers by name for consistent display
             ledgers.sort(key=lambda l: l.name.lower())
@@ -1781,8 +1831,46 @@ class TallyDataReader(QObject):
             return ledgers
             
         except Exception as e:
-            logger.error(f"Error parsing ledger list: {e}", exc_info=True)
+            logger.error(f"Error parsing ASCII ledger list: {e}", exc_info=True)
             return []
+    
+    def _classify_ledger_from_name(self, ledger_name: str) -> 'LedgerType':
+        """
+        Classify ledger type based on name patterns
+        
+        Args:
+            ledger_name: Name of the ledger to classify
+            
+        Returns:
+            LedgerType enum value
+        """
+        from ..models.ledger_model import LedgerType
+        
+        name_upper = ledger_name.upper()
+        
+        # Classify based on common patterns in ledger names
+        if any(keyword in name_upper for keyword in ['CASH', 'PETTY CASH']):
+            return LedgerType.CASH
+        elif any(keyword in name_upper for keyword in ['BANK', 'SBI', 'HDFC', 'ICICI', 'AXIS']):
+            return LedgerType.BANK
+        elif any(keyword in name_upper for keyword in ['SALES', 'REVENUE', 'INCOME']):
+            return LedgerType.INCOME
+        elif any(keyword in name_upper for keyword in ['PURCHASE', 'EXPENSE', 'COST']):
+            return LedgerType.EXPENSE
+        elif any(keyword in name_upper for keyword in ['DEBTOR', 'RECEIVABLE', 'CUSTOMER']):
+            return LedgerType.DEBTOR
+        elif any(keyword in name_upper for keyword in ['CREDITOR', 'PAYABLE', 'VENDOR', 'SUPPLIER']):
+            return LedgerType.CREDITOR
+        elif any(keyword in name_upper for keyword in ['GST', 'CGST', 'SGST', 'IGST', 'TAX']):
+            return LedgerType.TAX
+        elif any(keyword in name_upper for keyword in ['ASSET', 'FIXED ASSET', 'EQUIPMENT']):
+            return LedgerType.ASSET
+        elif any(keyword in name_upper for keyword in ['CAPITAL', 'EQUITY', 'OWNER']):
+            return LedgerType.CAPITAL
+        elif any(keyword in name_upper for keyword in ['LOAN', 'LIABILITY', 'PAYABLE']):
+            return LedgerType.LIABILITY
+        else:
+            return LedgerType.OTHER
     
     
     def _parse_single_ledger(self, ledger_elem) -> Optional:
@@ -1806,11 +1894,17 @@ class TallyDataReader(QObject):
             
             # Extract basic ledger information
             # Ledger name - can be in different elements
-            name_elem = (
-                ledger_elem.find(".//NAME") or 
-                ledger_elem.find(".//LEDGERNAME") or
-                ledger_elem
-            )
+            # Note: XML elements can evaluate to False in boolean context even when found,
+            # so we must use explicit None checking for reliable element detection
+            name_elem = None
+            if ledger_elem.find(".//NAME") is not None:
+                name_elem = ledger_elem.find(".//NAME")
+            elif ledger_elem.find(".//LEDGERNAME") is not None:
+                name_elem = ledger_elem.find(".//LEDGERNAME")
+            elif ledger_elem.find(".//DSPDISPNAME") is not None:  # Trial Balance format
+                name_elem = ledger_elem.find(".//DSPDISPNAME")
+            else:
+                name_elem = ledger_elem
             
             if name_elem is not None:
                 if name_elem.text:
@@ -2631,6 +2725,33 @@ class TallyDataReader(QObject):
             
         except Exception as e:
             logger.warning(f"Error parsing voucher properties: {e}")
+    
+    def get_all_ledgers(self) -> List:
+        """
+        Get all ledgers for GUI integration
+        
+        This method gets ledger data from TallyPrime and returns parsed LedgerInfo objects
+        for easy integration with Qt GUI components.
+        
+        Returns:
+            List of LedgerInfo objects or empty list on error
+        """
+        try:
+            # Get raw ledger data from TallyPrime
+            response = self.get_ledger_list()
+            
+            if response.success and response.data:
+                # Parse the XML data into LedgerInfo objects
+                ledgers = self.parse_ledger_list(response.data)
+                logger.info(f"Successfully parsed {len(ledgers)} ledgers")
+                return ledgers
+            else:
+                logger.warning(f"Failed to get ledger data: {response.error_message}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in get_all_ledgers: {e}")
+            return []
 
 
 # Convenience function for quick testing and development
