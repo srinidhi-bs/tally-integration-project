@@ -28,9 +28,10 @@ from PySide6.QtWidgets import (
     QFrame, QGroupBox
 )
 
-# Import our professional connection widget
+# Import our professional widgets
 from .widgets.connection_widget import ConnectionWidget
 from .widgets.data_table_widget import ProfessionalDataTableWidget
+from .widgets.log_widget import ProfessionalLogWidget
 from .dialogs.connection_dialog import ConnectionDialog
 
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
@@ -97,6 +98,7 @@ class MainWindow(QMainWindow):
         self.data_reader: Optional[TallyDataReader] = None
         self.settings_manager: Optional[SettingsManager] = None
         self.connection_widget: Optional[ConnectionWidget] = None
+        self.log_widget: Optional[ProfessionalLogWidget] = None
         
         # Initialize the window
         self._setup_window_properties()
@@ -356,50 +358,43 @@ class MainWindow(QMainWindow):
         """
         Create the content for the log panel dock widget.
         
-        This panel contains:
-        - Real-time operation logging
-        - Status messages and updates
-        - Error reporting and debugging information
+        This panel now contains the advanced ProfessionalLogWidget which provides:
+        - Real-time colored operation logging with professional formatting
+        - Advanced filtering by log level, content, and time range
+        - Professional search functionality with regex support
+        - Log export to multiple formats (TXT, CSV, JSON)
+        - Log rotation and size management
+        - Auto-scroll and manual positioning controls
+        - Professional UI with theme integration
         
         Returns:
-            QWidget: Configured log panel content
+            ProfessionalLogWidget: Advanced log widget
         """
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(4)
-        layout.setContentsMargins(4, 4, 4, 4)
+        # Create the professional log widget
+        self.log_widget = ProfessionalLogWidget(self)
         
-        # Log header
-        header_label = QLabel("Live Operations Log")
-        header_label.setStyleSheet("font-weight: bold; color: #2c3e50; padding: 4px;")
-        layout.addWidget(header_label)
+        # Connect log widget signals for integration
+        self.log_widget.log_exported.connect(self._on_log_exported)
+        self.log_widget.filter_changed.connect(self._on_log_filter_changed)
         
-        # Log display area
-        self.log_display = QTextEdit()
-        self.log_display.setReadOnly(True)
-        # Note: QTextEdit doesn't have setMaximumBlockCount, we'll manage log size manually
+        # Add some initial application startup log entries
+        self.log_widget.add_log_entry(
+            "🔗 Application started - TallyPrime Integration Manager", 
+            "INFO", 
+            "MainWindow"
+        )
+        self.log_widget.add_log_entry(
+            "📊 Waiting for TallyPrime connection...", 
+            "INFO", 
+            "MainWindow"
+        )
+        self.log_widget.add_log_entry(
+            "⚡ System ready for operations", 
+            "INFO", 
+            "MainWindow"
+        )
         
-        # Style the log display
-        self.log_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #2c3e50;
-                color: #ecf0f1;
-                border: 1px solid #34495e;
-                border-radius: 4px;
-                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-                font-size: 11px;
-                padding: 4px;
-            }
-        """)
-        
-        # Add some initial log entries
-        self._add_log_entry("🔗 Application started - TallyPrime Integration Manager", "info")
-        self._add_log_entry("📊 Waiting for TallyPrime connection...", "info")
-        self._add_log_entry("⚡ System ready for operations", "success")
-        
-        layout.addWidget(self.log_display)
-        
-        return widget
+        return self.log_widget
     
     def _create_main_content_area(self) -> QWidget:
         """
@@ -470,35 +465,39 @@ class MainWindow(QMainWindow):
             self.log_panel_action.setChecked
         )
     
-    def _add_log_entry(self, message: str, level: str = "info"):
+    def _add_log_entry(self, message: str, level: str = "info", source: str = "MainWindow"):
         """
-        Add an entry to the log display with timestamp and styling.
+        Add an entry to the advanced log display with professional formatting.
+        
+        This method now uses the ProfessionalLogWidget which provides:
+        - Professional timestamp and color formatting
+        - Thread-safe logging operations
+        - Automatic filtering and search integration
+        - Export capability and log rotation
         
         Args:
             message: Log message to display
-            level: Log level (info, success, warning, error)
+            level: Log level (info, success, warning, error, debug, critical)
+            source: Source component generating the log (for organization)
         """
-        from datetime import datetime
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        
-        # Color coding based on log level
-        colors = {
-            "info": "#3498db",      # Blue
-            "success": "#27ae60",   # Green  
-            "warning": "#f39c12",   # Orange
-            "error": "#e74c3c"      # Red
-        }
-        
-        color = colors.get(level, "#ecf0f1")
-        
-        formatted_entry = f'<span style="color: {color}">{timestamp} - {message}</span>'
-        self.log_display.append(formatted_entry)
-        
-        # Auto-scroll to bottom
-        cursor = self.log_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.log_display.setTextCursor(cursor)
+        if self.log_widget:
+            # Map legacy level names to standard logging levels
+            level_mapping = {
+                "info": "INFO",
+                "success": "INFO",  # Success messages are INFO level with success indicators
+                "warning": "WARNING",
+                "error": "ERROR",
+                "debug": "DEBUG",
+                "critical": "CRITICAL"
+            }
+            
+            mapped_level = level_mapping.get(level.lower(), "INFO")
+            
+            # Use the professional log widget's advanced logging
+            self.log_widget.add_log_entry(message, mapped_level, source)
+        else:
+            # Fallback to console logging if widget not available
+            self.logger.info(f"[{source}] {message}")
     
     def _create_placeholder_panel(self, title: str, description: str) -> QWidget:
         """
@@ -955,3 +954,42 @@ class MainWindow(QMainWindow):
             self._add_log_entry(error_msg, "error")
             self.status_bar.showMessage("Failed to load transaction data")
             self.logger.error(f"Error loading transaction data: {e}")
+    
+    # Signal handlers for the professional log widget
+    
+    def _on_log_exported(self, file_path: str, success: bool, error_message: str):
+        """
+        Handle log export completion from the advanced log widget
+        
+        Args:
+            file_path: The file path where logs were exported
+            success: Whether export was successful
+            error_message: Error message if export failed
+        """
+        if success:
+            self.status_bar.showMessage(f"Logs exported successfully to {file_path}", 5000)
+            self.logger.info(f"Log export successful: {file_path}")
+        else:
+            self.status_bar.showMessage(f"Log export failed: {error_message}", 8000)
+            self.logger.error(f"Log export failed: {error_message}")
+    
+    def _on_log_filter_changed(self, level_filter: str, text_filter: str):
+        """
+        Handle log filter changes from the advanced log widget
+        
+        Args:
+            level_filter: Current log level filter
+            text_filter: Current text search filter
+        """
+        # Update status bar with filter information
+        if level_filter != "ALL" or text_filter:
+            filter_info = []
+            if level_filter != "ALL":
+                filter_info.append(f"Level: {level_filter}")
+            if text_filter:
+                filter_info.append(f"Search: '{text_filter[:20]}{'...' if len(text_filter) > 20 else ''}'")
+            
+            filter_status = f"Log filters: {', '.join(filter_info)}"
+            self.status_bar.showMessage(filter_status, 3000)
+        
+        self.logger.debug(f"Log filters changed - Level: {level_filter}, Text: '{text_filter}'")
