@@ -190,7 +190,7 @@ class TestThreadingFrameworkIntegration:
         # Configure mock to return ledger data
         with patch('core.tally.data_reader.TallyDataReader') as mock_reader_class:
             mock_reader = mock_reader_class.return_value
-            mock_reader.get_all_ledgers_info.return_value = mock_ledgers
+            mock_reader.get_all_ledgers.return_value = mock_ledgers
             
             # Create and execute worker
             worker = DataLoadWorker(mock_tally_connector, "ledgers")
@@ -212,7 +212,7 @@ class TestThreadingFrameworkIntegration:
             
             # Verify mock calls
             mock_tally_connector.is_connected.assert_called()
-            mock_reader.get_all_ledgers_info.assert_called_once()
+            mock_reader.get_all_ledgers.assert_called_once()
         
         # Clean up
         worker.wait(1000)

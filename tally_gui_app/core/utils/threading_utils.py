@@ -436,7 +436,7 @@ class TallyOperationWorker(BaseWorkerThread):
         """
         # Validate connection before proceeding
         self.update_status("Validating TallyPrime connection...")
-        if not self.tally_connector.is_connected():
+        if not self.tally_connector.is_connected:
             self.update_status("Connecting to TallyPrime...")
             success, message = self.tally_connector.test_connection_sync()
             if not success:
@@ -527,7 +527,7 @@ class DataLoadWorker(TallyOperationWorker):
         
         # Get ledger count for progress calculation
         self.update_progress(15, "Analyzing ledger data...")
-        ledgers = data_reader.get_all_ledgers_info()
+        ledgers = data_reader.get_all_ledgers()
         
         if self.is_cancelled:
             return None

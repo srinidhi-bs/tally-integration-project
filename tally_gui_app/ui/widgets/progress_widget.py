@@ -32,8 +32,8 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QFrame, QSizePolicy, QSpacerItem
 )
 
-from ...core.utils.threading_utils import TaskProgress, TaskStatus, TaskResult
-from ..resources.styles.theme_manager import ThemeManager
+from core.utils.threading_utils import TaskProgress, TaskStatus, TaskResult
+from ui.resources.styles.theme_manager import get_theme_manager
 
 
 class TaskProgressWidget(QFrame):
@@ -139,8 +139,8 @@ class TaskProgressWidget(QFrame):
         """Apply professional styling to the widget"""
         
         # Get current theme colors
-        theme_manager = ThemeManager.get_instance()
-        colors = theme_manager.get_colors()
+        theme_manager = get_theme_manager()
+        colors = theme_manager.colors
         
         # Style the frame
         self.setFrameStyle(QFrame.Box)
@@ -227,8 +227,8 @@ class TaskProgressWidget(QFrame):
     
     def _set_progress_color(self, color: str):
         """Set progress bar color"""
-        theme_manager = ThemeManager.get_instance()
-        colors = theme_manager.get_colors()
+        theme_manager = get_theme_manager()
+        colors = theme_manager.colors
         
         self.progress_bar.setStyleSheet(f"""
             QProgressBar {{
@@ -386,8 +386,8 @@ class ProgressWidget(QWidget):
     def _apply_styling(self):
         """Apply professional styling"""
         
-        theme_manager = ThemeManager.get_instance()
-        colors = theme_manager.get_colors()
+        theme_manager = get_theme_manager()
+        colors = theme_manager.colors
         
         self.setStyleSheet(f"""
             QWidget {{
