@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from .widgets.connection_widget import ConnectionWidget
 from .widgets.data_table_widget import ProfessionalDataTableWidget
 from .widgets.log_widget import ProfessionalLogWidget
+from .widgets.progress_widget import ProgressWidget
 from .dialogs.connection_dialog import ConnectionDialog
 
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
@@ -42,6 +43,12 @@ from core.tally.connector import TallyConnector, TallyConnectionConfig
 from core.tally.data_reader import TallyDataReader
 from core.models.ledger_model import LedgerInfo, LedgerBalance, LedgerType
 from app.settings import SettingsManager
+
+# Import threading framework for responsive UI
+from core.utils.threading_utils import (
+    TaskManager, DataLoadWorker, TaskStatus, TaskResult, TaskProgress,
+    create_task_manager, create_data_load_task
+)
 
 
 class MainWindow(QMainWindow):
@@ -100,6 +107,11 @@ class MainWindow(QMainWindow):
         self.connection_widget: Optional[ConnectionWidget] = None
         self.log_widget: Optional[ProfessionalLogWidget] = None
         
+        # Threading framework components for responsive UI
+        self.task_manager: Optional[TaskManager] = None
+        self.progress_widget: Optional[ProgressWidget] = None
+        self.progress_dock: Optional[QDockWidget] = None
+        
         # Initialize the window
         self._setup_window_properties()
         self._create_menu_bar()
@@ -108,6 +120,7 @@ class MainWindow(QMainWindow):
         self._create_dock_widgets()
         self._create_status_bar()
         self._setup_tally_integration()
+        self._setup_threading_framework()
         self._restore_window_state()
         
         self.logger.info("Main window initialized successfully")
@@ -191,6 +204,12 @@ class MainWindow(QMainWindow):
         self.log_panel_action.setChecked(True)
         self.log_panel_action.setStatusTip("Show/hide the log panel")
         view_menu.addAction(self.log_panel_action)
+        
+        self.progress_panel_action = QAction("&Progress Panel", self)
+        self.progress_panel_action.setCheckable(True)
+        self.progress_panel_action.setChecked(True)
+        self.progress_panel_action.setStatusTip("Show/hide the background tasks progress panel")
+        view_menu.addAction(self.progress_panel_action)
         
         # Create Tools menu
         tools_menu = self.menu_bar.addMenu("&Tools")
@@ -309,10 +328,29 @@ class MainWindow(QMainWindow):
         # Add to main window (right side)
         self.addDockWidget(Qt.RightDockWidgetArea, self.log_panel_dock)
         
+        # Create Progress Panel Dock Widget for background task tracking
+        self.progress_dock = QDockWidget("Background Tasks", self)
+        self.progress_dock.setObjectName("ProgressPanelDock")  # Important for state saving
+        
+        # Create the progress widget
+        self.progress_widget = ProgressWidget()
+        self.progress_dock.setWidget(self.progress_widget)
+        
+        # Set dock widget properties
+        self.progress_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
+        self.progress_dock.setFeatures(
+            QDockWidget.DockWidgetMovable | 
+            QDockWidget.DockWidgetClosable | 
+            QDockWidget.DockWidgetFloatable
+        )
+        
+        # Add to main window (bottom area)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.progress_dock)
+        
         # Connect dock widget visibility to menu actions
         self._connect_dock_widget_actions()
         
-        self.logger.info("Dock widgets created: Control Panel (left) and Log Panel (right)")
+        self.logger.info("Dock widgets created: Control Panel (left), Log Panel (right), and Progress Panel (bottom)")
     
     def _setup_tally_integration(self):
         """
@@ -352,6 +390,44 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             self.logger.error(f"Failed to initialize TallyPrime integration: {str(e)}")
+    
+    def _setup_threading_framework(self):
+        """
+        Set up the threading framework for responsive UI operations
+        
+        This method initializes:
+        - TaskManager for centralized thread management
+        - Progress widget integration for task monitoring
+        - Signal connections for background operations
+        
+        Learning: Threading framework provides professional non-blocking UI
+        """
+        try:
+            # Initialize task manager with optimal thread count
+            self.task_manager = create_task_manager(max_threads=4)
+            
+            # Connect task manager signals to UI components
+            self.task_manager.task_added.connect(self._on_task_added)
+            self.task_manager.task_started.connect(self._on_task_started)
+            self.task_manager.task_completed.connect(self._on_task_completed)
+            self.task_manager.task_cancelled.connect(self._on_task_cancelled)
+            self.task_manager.task_progress.connect(self._on_task_progress)
+            
+            # Connect progress widget cancellation requests to task manager
+            if self.progress_widget:
+                self.progress_widget._on_cancel_requested.connect(self.task_manager.cancel_task)
+            
+            self._add_log_entry(
+                "🧵 Threading framework initialized - Ready for background operations", 
+                "info", 
+                "Threading"
+            )
+            
+            self.logger.info("Threading framework initialized successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to initialize threading framework: {str(e)}")
+            self._add_log_entry(f"❌ Threading framework initialization failed: {str(e)}", "error")
     
     
     def _create_log_panel_content(self) -> QWidget:
@@ -463,6 +539,14 @@ class MainWindow(QMainWindow):
         )
         self.log_panel_dock.visibilityChanged.connect(
             self.log_panel_action.setChecked
+        )
+        
+        # Progress Panel visibility sync
+        self.progress_panel_action.triggered.connect(
+            lambda checked: self.progress_dock.setVisible(checked)
+        )
+        self.progress_dock.visibilityChanged.connect(
+            self.progress_panel_action.setChecked
         )
     
     def _add_log_entry(self, message: str, level: str = "info", source: str = "MainWindow"):
@@ -820,140 +904,95 @@ class MainWindow(QMainWindow):
     
     def _load_ledger_data(self):
         """
-        Load ledger data from TallyPrime and populate the data table
+        Load ledger data from TallyPrime using background threading
         
-        This method uses the TallyDataReader to fetch ledger accounts
-        and displays them in the professional data table widget.
+        This method now uses the threading framework to perform data loading
+        in the background, keeping the UI responsive during the operation.
+        
+        Learning: Professional applications should never block the UI thread
+        for network operations or heavy computations.
         """
+        if not self.task_manager or not self.tally_connector:
+            self._add_log_entry("⚠ Threading framework or TallyConnector not available", "warning")
+            return
+        
         try:
-            self._add_log_entry("📋 Fetching ledger accounts from TallyPrime...", "info")
+            # Create a background data loading task
+            data_worker = create_data_load_task(self.tally_connector, "ledgers")
             
-            # Use data reader to fetch ledger data with caching
-            # The data reader returns LedgerInfo objects directly
-            ledgers = self.data_reader.get_all_ledgers()
+            # Submit the task to the task manager
+            task_id = self.task_manager.submit_task(data_worker)
             
-            if ledgers:
-                # The data table expects LedgerInfo objects, so we can use them directly
-                self.data_table.set_ledger_data(ledgers)
-                
-                # Update status and logs
-                count = len(ledgers)
-                success_msg = f"✅ Loaded {count} ledger accounts successfully"
-                self._add_log_entry(success_msg, "success")
-                self.status_bar.showMessage(f"Loaded {count} ledger accounts")
-                
-                self.logger.info(f"Successfully loaded {count} ledger accounts")
-            else:
-                self._add_log_entry("⚠ No ledger data received from TallyPrime", "warning")
-                self.status_bar.showMessage("No ledger data found")
-                
+            self._add_log_entry("🔄 Starting background ledger data loading...", "info")
+            self.status_bar.showMessage("Loading ledger data in background...")
+            
+            self.logger.info(f"Ledger data loading task submitted: {task_id}")
+            
         except Exception as e:
-            error_msg = f"❌ Error loading ledger data: {str(e)}"
+            error_msg = f"❌ Error starting ledger data loading: {str(e)}"
             self._add_log_entry(error_msg, "error")
-            self.status_bar.showMessage("Failed to load ledger data")
-            self.logger.error(f"Error loading ledger data: {e}")
+            self.status_bar.showMessage("Failed to start ledger data loading")
+            self.logger.error(f"Error starting ledger data loading: {e}")
     
     def _load_balance_sheet_data(self):
         """
-        Load balance sheet data from TallyPrime and populate the data table
+        Load balance sheet data from TallyPrime using background threading
         
-        This method fetches balance sheet information and displays it
-        in a structured format using mock LedgerInfo objects.
+        This method creates a background task for loading balance sheet data,
+        demonstrating how different types of data operations can use the same
+        threading framework.
         """
+        if not self.task_manager or not self.tally_connector:
+            self._add_log_entry("⚠ Threading framework or TallyConnector not available", "warning")
+            return
+        
         try:
-            self._add_log_entry("📊 Fetching balance sheet data from TallyPrime...", "info")
+            # Create a background data loading task for balance sheet
+            data_worker = create_data_load_task(self.tally_connector, "balance_sheet")
             
-            # For now, create placeholder balance sheet data as LedgerInfo objects
-            # In a real implementation, this would use the data reader to get actual balance sheet data
-            from decimal import Decimal
-            balance_sheet_ledgers = [
-                LedgerInfo(
-                    name="Current Assets",
-                    ledger_type=LedgerType.ASSETS,
-                    parent_group_name="Balance Sheet",
-                    balance=LedgerBalance(opening_balance=Decimal("25000.00"))
-                ),
-                LedgerInfo(
-                    name="Current Liabilities",
-                    ledger_type=LedgerType.LIABILITIES,
-                    parent_group_name="Balance Sheet",
-                    balance=LedgerBalance(opening_balance=Decimal("15000.00"))
-                ),
-                LedgerInfo(
-                    name="Capital Account",
-                    ledger_type=LedgerType.CAPITAL,
-                    parent_group_name="Balance Sheet",
-                    balance=LedgerBalance(opening_balance=Decimal("10000.00"))
-                )
-            ]
+            # Submit the task to the task manager
+            task_id = self.task_manager.submit_task(data_worker)
             
-            # Set data to table using the ledger data method
-            self.data_table.set_ledger_data(balance_sheet_ledgers)
+            self._add_log_entry("🔄 Starting background balance sheet data loading...", "info")
+            self.status_bar.showMessage("Loading balance sheet data in background...")
             
-            # Update status and logs
-            count = len(balance_sheet_ledgers)
-            success_msg = f"✅ Loaded balance sheet with {count} items"
-            self._add_log_entry(success_msg, "success")
-            self.status_bar.showMessage(f"Balance sheet loaded ({count} items)")
+            self.logger.info(f"Balance sheet data loading task submitted: {task_id}")
             
-            self.logger.info(f"Successfully loaded balance sheet with {count} items")
-                
         except Exception as e:
-            error_msg = f"❌ Error loading balance sheet data: {str(e)}"
+            error_msg = f"❌ Error starting balance sheet data loading: {str(e)}"
             self._add_log_entry(error_msg, "error")
-            self.status_bar.showMessage("Failed to load balance sheet data")
-            self.logger.error(f"Error loading balance sheet data: {e}")
+            self.status_bar.showMessage("Failed to start balance sheet data loading")
+            self.logger.error(f"Error starting balance sheet data loading: {e}")
     
     def _load_transaction_data(self):
         """
-        Load recent transaction data from TallyPrime and populate the data table
+        Load recent transaction data from TallyPrime using background threading
         
-        This method fetches recent transaction entries and displays them
-        using mock LedgerInfo objects representing transaction accounts.
+        This method demonstrates loading transaction data in a background thread,
+        maintaining UI responsiveness while performing potentially time-consuming
+        data retrieval operations.
         """
+        if not self.task_manager or not self.tally_connector:
+            self._add_log_entry("⚠ Threading framework or TallyConnector not available", "warning")
+            return
+        
         try:
-            self._add_log_entry("📈 Fetching recent transactions from TallyPrime...", "info")
+            # Create a background data loading task for transactions
+            data_worker = create_data_load_task(self.tally_connector, "transactions")
             
-            # For now, create placeholder transaction data as LedgerInfo objects
-            # In a real implementation, this would use the data reader to get actual transaction data
-            from decimal import Decimal
-            transaction_ledgers = [
-                LedgerInfo(
-                    name="Sales Account - Recent Transactions",
-                    ledger_type=LedgerType.INCOME,
-                    parent_group_name="Sales Accounts",
-                    balance=LedgerBalance(opening_balance=Decimal("5000.00"))
-                ),
-                LedgerInfo(
-                    name="Purchase Account - Recent Transactions", 
-                    ledger_type=LedgerType.EXPENSES,
-                    parent_group_name="Purchase Accounts",
-                    balance=LedgerBalance(opening_balance=Decimal("3000.00"))
-                ),
-                LedgerInfo(
-                    name="Cash Account - Recent Transactions",
-                    ledger_type=LedgerType.ASSETS,
-                    parent_group_name="Current Assets",
-                    balance=LedgerBalance(opening_balance=Decimal("12000.00"))
-                )
-            ]
+            # Submit the task to the task manager
+            task_id = self.task_manager.submit_task(data_worker)
             
-            # Set data to table using the ledger data method
-            self.data_table.set_ledger_data(transaction_ledgers)
+            self._add_log_entry("🔄 Starting background transaction data loading...", "info")
+            self.status_bar.showMessage("Loading transaction data in background...")
             
-            # Update status and logs
-            count = len(transaction_ledgers)
-            success_msg = f"✅ Loaded {count} recent transactions"
-            self._add_log_entry(success_msg, "success")
-            self.status_bar.showMessage(f"Loaded {count} recent transactions")
+            self.logger.info(f"Transaction data loading task submitted: {task_id}")
             
-            self.logger.info(f"Successfully loaded {count} recent transactions")
-                
         except Exception as e:
-            error_msg = f"❌ Error loading transaction data: {str(e)}"
+            error_msg = f"❌ Error starting transaction data loading: {str(e)}"
             self._add_log_entry(error_msg, "error")
-            self.status_bar.showMessage("Failed to load transaction data")
-            self.logger.error(f"Error loading transaction data: {e}")
+            self.status_bar.showMessage("Failed to start transaction data loading")
+            self.logger.error(f"Error starting transaction data loading: {e}")
     
     # Signal handlers for the professional log widget
     
@@ -993,3 +1032,105 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(filter_status, 3000)
         
         self.logger.debug(f"Log filters changed - Level: {level_filter}, Text: '{text_filter}'")
+    
+    # Threading framework signal handlers
+    
+    def _on_task_added(self, task_id, task_name: str):
+        """
+        Handle task addition to the task manager
+        
+        Args:
+            task_id: Unique task identifier
+            task_name: Display name for the task
+        """
+        # Add task to progress widget for monitoring
+        if self.progress_widget:
+            self.progress_widget.add_task(task_id, task_name)
+        
+        self._add_log_entry(f"🚀 Background task started: {task_name}", "info", "Threading")
+        self.logger.info(f"Background task added: {task_name} (ID: {task_id})")
+    
+    def _on_task_started(self, task_id):
+        """Handle task start notification"""
+        self.logger.debug(f"Task started: {task_id}")
+    
+    def _on_task_completed(self, task_id, result: TaskResult):
+        """
+        Handle task completion from the task manager
+        
+        Args:
+            task_id: Task identifier
+            result: Task execution result
+        """
+        # Update progress widget status
+        if self.progress_widget:
+            self.progress_widget.update_task_status(task_id, result.status)
+        
+        # Log the result
+        if result.is_success:
+            execution_time = result.execution_time_ms / 1000.0  # Convert to seconds
+            self._add_log_entry(
+                f"✅ Background task completed successfully in {execution_time:.1f}s", 
+                "success", 
+                "Threading"
+            )
+            
+            # Handle specific data loading results
+            self._handle_data_loading_result(task_id, result)
+            
+        else:
+            self._add_log_entry(
+                f"❌ Background task failed: {result.error}", 
+                "error", 
+                "Threading"
+            )
+        
+        self.logger.info(f"Task completed: {task_id} - Status: {result.status.value}")
+    
+    def _on_task_cancelled(self, task_id):
+        """Handle task cancellation"""
+        if self.progress_widget:
+            self.progress_widget.update_task_status(task_id, TaskStatus.CANCELLED)
+        
+        self._add_log_entry("⏹️ Background task cancelled by user", "info", "Threading")
+        self.logger.info(f"Task cancelled: {task_id}")
+    
+    def _on_task_progress(self, task_id, progress: TaskProgress):
+        """
+        Handle task progress updates
+        
+        Args:
+            task_id: Task identifier  
+            progress: Progress information
+        """
+        # Update progress widget
+        if self.progress_widget:
+            self.progress_widget.update_task_progress(task_id, progress)
+        
+        # Log significant progress milestones
+        if progress.percentage % 25 == 0 and progress.percentage > 0:
+            self.logger.debug(f"Task progress: {task_id} - {progress.percentage}%")
+    
+    def _handle_data_loading_result(self, task_id, result: TaskResult):
+        """
+        Handle results from data loading tasks
+        
+        Args:
+            task_id: Task identifier
+            result: Task result containing loaded data
+        """
+        if result.is_success and result.data:
+            # Update the data table with loaded data
+            if hasattr(self, 'data_table') and result.data:
+                try:
+                    # Assume result.data contains ledger information
+                    if isinstance(result.data, list) and len(result.data) > 0:
+                        self.data_table.set_ledger_data(result.data)
+                        
+                        count = len(result.data)
+                        self.status_bar.showMessage(f"Loaded {count} records successfully")
+                        self._add_log_entry(f"📊 Data table updated with {count} records", "success")
+                        
+                except Exception as e:
+                    self.logger.error(f"Error updating data table: {e}")
+                    self._add_log_entry(f"❌ Error updating data table: {str(e)}", "error")
