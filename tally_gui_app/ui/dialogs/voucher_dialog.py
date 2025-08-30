@@ -59,6 +59,7 @@ from core.models.voucher_model import (
     TaxDetails, VoucherReference, GSTPurpose
 )
 from core.tally.connector import TallyConnector
+from ui.dialogs.posting_confirmation_dialog import PostingConfirmationDialog
 from core.tally.data_reader import TallyDataReader
 from app.settings import SettingsManager
 from ui.resources.styles.theme_manager import get_theme_manager
@@ -457,15 +458,24 @@ class VoucherEntryDialog(QDialog):
         
         main_layout.addWidget(self.tab_widget)
         
-        # Button box
+        # Button box with custom posting button
+        button_frame = QFrame()
+        button_layout = QHBoxLayout(button_frame)
+        
+        # Add custom posting button
+        self.post_button = QPushButton("📤 Post to TallyPrime")
+        self.post_button.setObjectName("post_button")
+        self.post_button.setEnabled(False)  # Initially disabled
+        
+        # Standard dialog buttons
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Apply
         )
         self.button_box.setObjectName("voucher_buttons")
         
-        # Customize button text
+        # Customize standard button text
         ok_button = self.button_box.button(QDialogButtonBox.Ok)
-        ok_button.setText("💾 Save && Close")
+        ok_button.setText("💾 Save & Close")
         
         apply_button = self.button_box.button(QDialogButtonBox.Apply)
         apply_button.setText("✅ Save")
@@ -473,7 +483,12 @@ class VoucherEntryDialog(QDialog):
         cancel_button = self.button_box.button(QDialogButtonBox.Cancel)
         cancel_button.setText("❌ Cancel")
         
-        main_layout.addWidget(self.button_box)
+        # Button layout
+        button_layout.addWidget(self.post_button)
+        button_layout.addStretch()
+        button_layout.addWidget(self.button_box)
+        
+        main_layout.addWidget(button_frame)
         
         self.setLayout(main_layout)
     
@@ -798,6 +813,10 @@ class VoucherEntryDialog(QDialog):
         if apply_button:
             apply_button.clicked.connect(self.save_voucher)
         
+        # Posting button connection
+        if hasattr(self, 'post_button') and self.post_button:
+            self.post_button.clicked.connect(self.post_voucher_to_tally)
+        
         # Basic details connections
         if self.voucher_type_combo:
             self.voucher_type_combo.currentTextChanged.connect(self.on_voucher_type_changed)
@@ -830,6 +849,13 @@ class VoucherEntryDialog(QDialog):
         # Real-time preview updates
         if self.narration_edit:
             self.narration_edit.textChanged.connect(self.update_preview)
+            self.narration_edit.textChanged.connect(self.update_posting_button_state)
+        
+        # Real-time posting button state updates
+        if self.voucher_number_edit:
+            self.voucher_number_edit.textChanged.connect(self.update_posting_button_state)
+        if self.date_edit:
+            self.date_edit.dateChanged.connect(self.update_posting_button_state)
         
         logger.info("Signal-slot connections established")
     
@@ -1185,9 +1211,10 @@ class VoucherEntryDialog(QDialog):
         if hasattr(self, 'entry_narration_edit'):
             self.entry_narration_edit.clear()
         
-        # Update balance and preview
+        # Update balance, preview, and posting button state
         self.update_balance_display()
         self.update_preview()
+        self.update_posting_button_state()
         
         logger.info(f"Added transaction entry: {ledger_name} - {transaction_type.value} ₹{amount}")
     
@@ -1586,6 +1613,198 @@ class VoucherEntryDialog(QDialog):
         """Handle dialog acceptance - save and close"""
         if self.save_voucher():
             self.accept()
+
+    
+    def post_voucher_to_tally(self):
+        """
+        Post voucher to TallyPrime using posting confirmation dialog
+        
+        This method handles the complete posting workflow:
+        - Validation of voucher data
+        - Confirmation dialog with progress tracking
+        - Error handling and user feedback
+        - Success reporting
+        
+        Learning Points:
+        - Integration of multiple dialog components
+        - Professional workflow design
+        - Comprehensive error handling
+        """
+        # First validate the voucher
+        is_valid, errors = self.validate_voucher()
+        
+        if not is_valid:
+            error_text = "Cannot post voucher - validation failed:\n\n" + "\n".join(f"• {error}" for error in errors)
+            QMessageBox.critical(self, "Validation Error", error_text)
+            return
+        
+        # Check if connector is available
+        if not self.connector:
+            QMessageBox.warning(
+                self, 
+                "Connection Required",
+                "TallyPrime connection is required for posting vouchers.\n\nPlease establish a connection first."
+            )
+            return
+        
+        # Check if connector is connected
+        if not self.connector.is_connected:
+            QMessageBox.warning(
+                self,
+                "Not Connected", 
+                "Not connected to TallyPrime.\n\nPlease test the connection first."
+            )
+            return
+        
+        try:
+            # Create voucher from form
+            voucher = self.create_voucher_from_form()
+            
+            # Set timestamps
+            voucher.creation_date = datetime.now()
+            voucher.last_modified = datetime.now()
+            
+            # Show posting confirmation dialog
+            posting_dialog = PostingConfirmationDialog(
+                voucher=voucher,
+                connector=self.connector,
+                parent=self
+            )
+            
+            # Connect posting signals
+            posting_dialog.posting_confirmed.connect(self.on_voucher_posted_successfully)
+            posting_dialog.posting_cancelled.connect(self.on_posting_cancelled)
+            
+            # Show the dialog
+            result = posting_dialog.exec()
+            
+            logger.info(f"Posting dialog result: {result}")
+            
+        except Exception as e:
+            logger.error(f"Error initiating voucher posting: {str(e)}")
+            QMessageBox.critical(
+                self,
+                "Posting Error",
+                f"Failed to initiate voucher posting:\n{str(e)}"
+            )
+    
+    def on_voucher_posted_successfully(self, voucher: VoucherInfo):
+        """
+        Handle successful voucher posting
+        
+        Args:
+            voucher: Successfully posted voucher
+        """
+        logger.info(f"Voucher posted successfully: {voucher.voucher_number}")
+        
+        # Update voucher status
+        self.voucher = voucher
+        
+        # Emit appropriate signal
+        if self.is_editing:
+            self.voucher_updated.emit(voucher)
+        else:
+            self.voucher_created.emit(voucher)
+        
+        # Enable close button, disable post button
+        if hasattr(self, 'post_button'):
+            self.post_button.setEnabled(False)
+            self.post_button.setText("✅ Posted to TallyPrime")
+        
+        # Show success notification
+        QMessageBox.information(
+            self,
+            "Posting Successful",
+            f"Voucher {voucher.voucher_number} has been successfully posted to TallyPrime!"
+        )
+    
+    def on_posting_cancelled(self):
+        """Handle cancelled voucher posting"""
+        logger.info("Voucher posting was cancelled by user")
+        # No special action needed - just log the event
+    
+    def update_posting_button_state(self):
+        """
+        Update the posting button state based on voucher validation and connection status
+        
+        Learning Points:
+        - Dynamic UI state management
+        - User experience optimization
+        - Real-time validation feedback
+        """
+        if not hasattr(self, 'post_button') or not self.post_button:
+            return
+        
+        # Check validation
+        is_valid, _ = self.validate_voucher()
+        
+        # Check connection
+        has_connector = self.connector is not None
+        is_connected = has_connector and self.connector.is_connected
+        
+        # Enable posting button only if voucher is valid and connected
+        can_post = is_valid and is_connected
+        
+        self.post_button.setEnabled(can_post)
+        
+        # Update button text and tooltip
+        if not is_valid:
+            self.post_button.setText("📤 Post to TallyPrime (Validation Required)")
+            self.post_button.setToolTip("Voucher validation failed. Please fix errors before posting.")
+        elif not has_connector:
+            self.post_button.setText("📤 Post to TallyPrime (Connection Required)")
+            self.post_button.setToolTip("TallyPrime connector not available. Please check connection setup.")
+        elif not is_connected:
+            self.post_button.setText("📤 Post to TallyPrime (Not Connected)")
+            self.post_button.setToolTip("Not connected to TallyPrime. Please test connection first.")
+        else:
+            self.post_button.setText("📤 Post to TallyPrime")
+            self.post_button.setToolTip("Post this voucher to TallyPrime")
+    
+    def validate_voucher(self) -> Tuple[bool, List[str]]:
+        """
+        Validate voucher for posting readiness
+        
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        errors = []
+        
+        # Check basic fields
+        if not self.voucher_number_edit or not self.voucher_number_edit.text().strip():
+            errors.append("Voucher number is required")
+        
+        if not self.voucher_type_combo or not self.voucher_type_combo.currentData():
+            errors.append("Voucher type is required")
+        
+        if not self.date_edit or not self.date_edit.date():
+            errors.append("Date is required")
+        
+        # Check transaction entries
+        entries = self.get_transaction_entries()
+        if len(entries) < 2:
+            errors.append("At least two transaction entries are required")
+        
+        if not entries:
+            errors.append("No transaction entries found")
+        
+        # Check balance
+        total_debit = sum(e.amount for e in entries if e.transaction_type == TransactionType.DEBIT)
+        total_credit = sum(e.amount for e in entries if e.transaction_type == TransactionType.CREDIT)
+        difference = abs(total_debit - total_credit)
+        
+        if difference >= Decimal('0.01'):
+            errors.append(f"Voucher is not balanced (Difference: ₹{difference:,.2f})")
+        
+        # Check for empty ledger names
+        for i, entry in enumerate(entries, 1):
+            if not entry.ledger_name.strip():
+                errors.append(f"Entry {i}: Ledger name is required")
+            
+            if entry.amount <= 0:
+                errors.append(f"Entry {i}: Amount must be greater than zero")
+        
+        return len(errors) == 0, errors
     
     def closeEvent(self, event):
         """Handle dialog close event"""
