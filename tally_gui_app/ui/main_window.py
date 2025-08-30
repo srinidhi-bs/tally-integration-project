@@ -415,7 +415,7 @@ class MainWindow(QMainWindow):
             
             # Connect progress widget cancellation requests to task manager
             if self.progress_widget:
-                self.progress_widget._on_cancel_requested.connect(self.task_manager.cancel_task)
+                self.progress_widget.cancel_requested.connect(self.task_manager.cancel_task)
             
             self._add_log_entry(
                 "🧵 Threading framework initialized - Ready for background operations", 

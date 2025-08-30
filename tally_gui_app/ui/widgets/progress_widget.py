@@ -318,6 +318,9 @@ class ProgressWidget(QWidget):
     manages multiple child widgets dynamically.
     """
     
+    # Signal emitted when user requests task cancellation
+    cancel_requested = Signal(UUID)
+    
     def __init__(self, parent=None):
         """Initialize the progress widget"""
         super().__init__(parent)
@@ -519,6 +522,9 @@ class ProgressWidget(QWidget):
     def _on_cancel_requested(self, task_id: UUID):
         """Handle task cancellation request from child widget"""
         self.logger.info(f"Task cancellation requested: {task_id}")
+        
+        # Forward the cancellation request via signal
+        self.cancel_requested.emit(task_id)
         # This signal would be connected to the TaskManager in the main window
 
 
