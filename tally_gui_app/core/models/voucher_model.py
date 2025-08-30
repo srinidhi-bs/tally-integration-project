@@ -29,7 +29,7 @@ import json
 import logging
 
 # Qt6 imports for model integration
-from PySide6.QtCore import QObject, QAbstractTableModel, Qt, QModelIndex, QVariant
+from PySide6.QtCore import QObject, QAbstractTableModel, Qt, QModelIndex
 from PySide6.QtGui import QColor
 
 # Set up logger for this module
@@ -518,7 +518,7 @@ class VoucherTableModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         """Return data for display"""
         if not index.isValid() or index.row() >= len(self.vouchers):
-            return QVariant()
+            return None
         
         voucher = self.vouchers[index.row()]
         column = index.column()
@@ -576,13 +576,13 @@ class VoucherTableModel(QAbstractTableModel):
             elif column == 5:  # Full narration
                 return voucher.narration
         
-        return QVariant()
+        return None
     
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """Return header data"""
         if role == Qt.DisplayRole and orientation == Qt.Horizontal:
             return self.headers[section]
-        return QVariant()
+        return None
     
     def update_vouchers(self, vouchers: List[VoucherInfo]):
         """

@@ -323,7 +323,7 @@ class ThreadingTestWindow(QMainWindow):
     def _apply_styling(self):
         """Apply professional styling to the application"""
         
-        colors = self.theme_manager.get_colors()
+        colors = self.theme_manager.colors
         
         self.setStyleSheet(f"""
             QMainWindow {{

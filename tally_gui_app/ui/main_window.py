@@ -34,6 +34,7 @@ from .widgets.data_table_widget import ProfessionalDataTableWidget
 from .widgets.log_widget import ProfessionalLogWidget
 from .widgets.progress_widget import ProgressWidget
 from .dialogs.connection_dialog import ConnectionDialog
+from .dialogs.voucher_dialog import VoucherEntryDialog
 
 from PySide6.QtCore import QSettings, Signal, Qt, QSize
 from PySide6.QtGui import QAction, QKeySequence, QFont
@@ -213,6 +214,16 @@ class MainWindow(QMainWindow):
         
         # Create Tools menu
         tools_menu = self.menu_bar.addMenu("&Tools")
+        
+        # Add voucher entry actions
+        new_voucher_action = QAction("&New Voucher", self)
+        new_voucher_action.setShortcut(QKeySequence("Ctrl+N"))
+        new_voucher_action.setStatusTip("Create a new voucher entry")
+        new_voucher_action.triggered.connect(self._on_new_voucher)
+        tools_menu.addAction(new_voucher_action)
+        
+        tools_menu.addSeparator()
+        
         settings_action = QAction("&Settings", self)
         settings_action.setShortcut(QKeySequence.Preferences)
         settings_action.setStatusTip("Open application settings")
@@ -297,6 +308,10 @@ class MainWindow(QMainWindow):
         self.connection_widget.load_ledgers_requested.connect(self._on_load_ledgers)
         self.connection_widget.load_balance_sheet_requested.connect(self._on_load_balance_sheet)
         self.connection_widget.load_recent_transactions_requested.connect(self._on_load_recent_transactions)
+        
+        # Connect voucher entry signals
+        self.connection_widget.new_voucher_requested.connect(self._on_new_voucher)
+        self.connection_widget.edit_voucher_requested.connect(self._on_edit_voucher)
         
         # Set dock widget properties
         self.control_panel_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
@@ -821,6 +836,59 @@ class MainWindow(QMainWindow):
             self._load_transaction_data()
         else:
             self._add_log_entry("⚠ Data table or TallyConnector not available", "warning")
+    
+    def _on_new_voucher(self):
+        """Handle New Voucher button from connection widget."""
+        self.status_bar.showMessage("Opening new voucher dialog...")
+        self.logger.info("New Voucher action triggered from connection widget")
+        self._add_log_entry("📝 Opening new voucher entry dialog...", "info")
+        
+        try:
+            # Create new voucher dialog
+            dialog = VoucherEntryDialog(
+                connector=self.tally_connector,
+                data_reader=self.data_reader,
+                voucher=None,  # New voucher
+                parent=self
+            )
+            
+            # Connect voucher creation signal
+            dialog.voucher_created.connect(self._on_voucher_created)
+            
+            # Show dialog
+            result = dialog.exec()
+            
+            if result == dialog.Accepted:
+                self._add_log_entry("✅ New voucher dialog completed successfully", "success")
+            else:
+                self._add_log_entry("❌ New voucher dialog cancelled", "warning")
+                
+        except Exception as e:
+            self.logger.error(f"Error opening new voucher dialog: {str(e)}")
+            self._add_log_entry(f"❌ Error opening voucher dialog: {str(e)}", "error")
+        
+        self.status_bar.clearMessage()
+    
+    def _on_edit_voucher(self):
+        """Handle Edit Voucher button from connection widget."""
+        self.status_bar.showMessage("Edit voucher functionality coming soon...")
+        self.logger.info("Edit Voucher action triggered from connection widget")
+        self._add_log_entry("✏️ Edit voucher functionality - coming in Task 5.2", "info")
+        
+        # TODO: Implement voucher selection and editing in Task 5.2
+        # For now, just show a placeholder message
+        self._add_log_entry("⚠️ Please use 'New Voucher' for now - editing existing vouchers will be implemented in Task 5.2", "warning")
+        
+        self.status_bar.clearMessage()
+    
+    def _on_voucher_created(self, voucher):
+        """Handle voucher creation from dialog."""
+        self.logger.info(f"New voucher created: {voucher.voucher_number}")
+        self._add_log_entry(f"✅ Voucher created successfully: {voucher.get_voucher_display()}", "success")
+        
+        # TODO: In Task 5.2, we'll implement voucher posting to TallyPrime
+        # For now, just log the creation
+        self._add_log_entry(f"📋 Voucher details: {len(voucher.entries)} entries, Total: ₹{voucher.total_amount}", "info")
     
     # New action handlers for control panel buttons
     

@@ -176,6 +176,10 @@ class ConnectionWidget(QWidget):
     load_balance_sheet_requested = Signal()
     load_recent_transactions_requested = Signal()
     
+    # Voucher entry signals
+    new_voucher_requested = Signal()
+    edit_voucher_requested = Signal()
+    
     def __init__(self, parent: Optional[QWidget] = None):
         """
         Initialize the connection widget
@@ -363,6 +367,31 @@ class ConnectionWidget(QWidget):
         self.recent_transactions_btn.setEnabled(False)  # Disabled until connected
         data_ops_layout.addWidget(self.recent_transactions_btn)
         
+        # Separator for data entry section
+        data_entry_separator = QFrame()
+        data_entry_separator.setFrameShape(QFrame.HLine)
+        data_entry_separator.setFrameShadow(QFrame.Sunken)
+        data_ops_layout.addWidget(data_entry_separator)
+        
+        # Data Entry Section Label
+        data_entry_label = QLabel("📝 Data Entry")
+        data_entry_label.setStyleSheet("font-weight: bold; color: #2c3e50; margin-top: 5px;")
+        data_ops_layout.addWidget(data_entry_label)
+        
+        # New Voucher Button
+        self.new_voucher_btn = QPushButton("📝 New Voucher")
+        self.new_voucher_btn.clicked.connect(self._on_new_voucher)
+        self.new_voucher_btn.setToolTip("Create a new voucher entry")
+        self.new_voucher_btn.setEnabled(False)  # Disabled until connected
+        data_ops_layout.addWidget(self.new_voucher_btn)
+        
+        # Edit Voucher Button
+        self.edit_voucher_btn = QPushButton("✏️ Edit Voucher")
+        self.edit_voucher_btn.clicked.connect(self._on_edit_voucher)
+        self.edit_voucher_btn.setToolTip("Edit an existing voucher")
+        self.edit_voucher_btn.setEnabled(False)  # Disabled until connected
+        data_ops_layout.addWidget(self.edit_voucher_btn)
+        
         parent_layout.addWidget(data_ops_group)
     
     def _create_company_info_section(self, parent_layout: QVBoxLayout):
@@ -528,6 +557,22 @@ class ConnectionWidget(QWidget):
         self.load_recent_transactions_requested.emit()
         self.logger.info("Recent transactions data loading requested")
     
+    def _on_new_voucher(self):
+        """
+        Handle new voucher button click
+        """
+        # Emit signal to request new voucher dialog
+        self.new_voucher_requested.emit()
+        self.logger.info("New voucher dialog requested")
+    
+    def _on_edit_voucher(self):
+        """
+        Handle edit voucher button click
+        """
+        # Emit signal to request edit voucher dialog
+        self.edit_voucher_requested.emit()
+        self.logger.info("Edit voucher dialog requested")
+    
     def _on_connection_status_changed(self, status: ConnectionStatus, message: str = ""):
         """
         Handle connection status changes from TallyConnector
@@ -607,6 +652,10 @@ class ConnectionWidget(QWidget):
         self.list_ledgers_btn.setEnabled(data_buttons_enabled)
         self.balance_sheet_btn.setEnabled(data_buttons_enabled)
         self.recent_transactions_btn.setEnabled(data_buttons_enabled)
+        
+        # Voucher entry buttons only enabled when connected
+        self.new_voucher_btn.setEnabled(data_buttons_enabled)
+        self.edit_voucher_btn.setEnabled(data_buttons_enabled)
     
     def _update_company_display(self):
         """
